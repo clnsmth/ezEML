@@ -53,7 +53,7 @@ import webapp.home.metapype_client
 from webapp.home.home_utils import log_error, log_info, log_available_memory
 import webapp.home.utils.load_and_save
 from webapp.home.utils.security import validate_download_url
-from webapp.pages import PAGE_CHECK_DATA_TABLES
+from webapp.pages import PAGE_CHECK_DATA_TABLES, PAGE_DATA_TABLE_SELECT
 from webapp.utils import path_exists, path_isdir, path_join
 
 import webapp.auth.user_data as user_data
@@ -1164,7 +1164,7 @@ def create_check_data_tables_status_page_content(document_name, eml_node):
                         onclick = f'onclick="return confirm(\'Data table size = {mb} MB. Continue?\') && stand_by_2;"'
                 action = f'<a href="data_table_fetch/{quoted_document_name}/{quoted_csv_name}/{quoted_url}"{onclick}>Fetch data table</a>'
             else:
-                action = 'CSV file missing. Upload via the Data Tables page.'
+                action = missing_file_message(csv_file_name, html=True)
         output += f'<tr><td width=2%><span class ="nav_link {status}_circle"></span></td>'
         output += f'<td width=68%>{data_table_name}</td>'
         output += f'<td width=5%></td>'
@@ -1179,6 +1179,27 @@ def create_check_data_tables_status_page_content(document_name, eml_node):
 def csv_file_exists(document_name, csv_file_name):
     csv_filepath = get_csv_filepath(document_name, csv_file_name)
     return path_exists(csv_filepath)
+
+
+def missing_file_message(csv_file_name, html=False):
+    """Return a standardised message explaining that a data file is absent and how to fix it.
+
+    When *html* is True, the message is returned as an HTML fragment with a link to the
+    Data Tables page.  When False (the default), a plain-text string is returned so it can
+    be used safely in flash() calls.
+    """
+    if html:
+        data_tables_url = url_for(PAGE_DATA_TABLE_SELECT, filename=user_data.get_active_document())
+        return (
+            f'The data file <strong>{csv_file_name}</strong> is not present on the server. '
+            'This can happen when the file was removed during routine cleanup. '
+            f'Please re-upload it from the <a href="{data_tables_url}">Data Tables page</a>.'
+        )
+    return (
+        f'The data file "{csv_file_name}" is not present on the server. '
+        'This can happen when the file was removed during routine cleanup. '
+        'Please re-upload it from the Data Tables page.'
+    )
 
 
 def create_explore_data_tables_page_content(current_document, eml_node):
@@ -1236,7 +1257,7 @@ def create_explore_data_tables_page_content(current_document, eml_node):
             csv_url = get_csv_external_url(current_document, csv_file_name)
             action, script = create_output_for_data_table(eml_node, eml_url, csv_url, data_table_node)
         else:
-            action = 'CSV file missing. Upload via the Data Tables page.'
+            action = missing_file_message(csv_file_name, html=True)
             script = ''
         script_output += script + '\n'
         output += f'<td width=68%>{data_table_name}</td>'

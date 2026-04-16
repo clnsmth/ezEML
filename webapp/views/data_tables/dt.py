@@ -659,6 +659,16 @@ def reupload_data(dt_node_id=None, filename=None, saved_filename=None, name_chg_
                 return redirect(request.url)
 
     # Process GET
+    if request.method == 'GET' and dt_node:
+        object_name_node = dt_node.find_descendant(names.OBJECTNAME)
+        if object_name_node and object_name_node.content:
+            original_filepath = os.path.join(uploads_folder, object_name_node.content)
+            if not os.path.exists(original_filepath):
+                flash(
+                    check_data_table_contents.missing_file_message(object_name_node.content)
+                    + ' Uploading a new file will replace it.',
+                    'info'
+                )
     help = views.get_helps(['data_table_reupload_full'])
     return render_template('reupload_data.html', title='Re-upload Data Table',
                            form=form, name=data_table_name, help=help)
@@ -1036,7 +1046,7 @@ def load_df(attribute_node, usecols=None):
         else:
             return pd.read_csv(full_path, encoding='utf8', sep=delimiter, quotechar=quote_char)
     except FileNotFoundError as e:
-        raise webapp.home.exceptions.DataFileNotFound(f"Data file {data_file} not found.")
+        raise webapp.home.exceptions.DataFileNotFound(data_file)
 
 
 def force_datetime_type(attribute_node):
@@ -1152,7 +1162,7 @@ def change_measurement_scale(attribute_node, old_mscale, new_mscale):
         try:
             sorted_codes = force_categorical_codes(attribute_node)
         except webapp.home.exceptions.DataFileNotFound as e:
-            flash(e.message, 'warning')
+            flash(check_data_table_contents.missing_file_message(e.message), 'warning')
             flash("ezEML changed the variable type to Categorical but cannot automatically detect the categorical codes when the data file is absent.", 'warning')
             return
         if not sorted_codes:
@@ -1184,7 +1194,7 @@ def change_measurement_scale(attribute_node, old_mscale, new_mscale):
         try:
             format_string = force_datetime_type(attribute_node)
         except webapp.home.exceptions.DataFileNotFound as e:
-            flash(e.message, 'warning')
+            flash(check_data_table_contents.missing_file_message(e.message), 'warning')
             flash("ezEML changed the variable type to DateTime but cannot automatically detect the datetime format when the data file is absent.", 'warning')
             return
         if format_string:

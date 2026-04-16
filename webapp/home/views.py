@@ -598,6 +598,10 @@ def data_table_errors(data_table_name:str=None):
 
     metadata_hash = check_data_table_contents.hash_data_table_metadata_settings(eml_node, data_table_name)
 
+    if not check_data_table_contents.csv_file_exists(current_document, csv_filename):
+        flash(check_data_table_contents.missing_file_message(csv_filename), 'error')
+        return redirect(url_for(PAGE_CHECK_DATA_TABLES))
+
     errors = check_data_table_contents.get_data_file_eval(current_document, csv_filename, metadata_hash)
     if not errors:
         try:
@@ -2871,10 +2875,12 @@ def zip_package(current_document=None, eml_node=None, include_data=True):
                     zip_object.write(pathname, arcname)
                 except FileNotFoundError as err:
                     filename = os.path.basename(err.filename)
-                    msg = f"Unable to archive the package. Missing file: {filename}."
+                    msg = (
+                        f'Unable to archive the package. The data file "{filename}" is not present on the server. '
+                        'This can happen when the file was removed during routine cleanup. '
+                        'Please re-upload it from the Data Tables page before exporting.'
+                    )
                     raise MissingFileError(msg)
-                    # flash(msg, category='error')
-                    # return None
 
     zip_object.close()
     return zipfile_path
