@@ -949,6 +949,52 @@ def set_check_data_tables_badge_status(document_name, eml_node):
     return status
 
 
+def flash_missing_data_files(document_name, eml_node):
+    """Flash a warning for every data file (data table or other entity) that is absent from the uploads folder.
+
+    Called immediately after a package is opened so the user sees actionable feedback on the Title page
+    without having to navigate to Check Data Tables or Data Tables.
+
+    Data tables whose distribution URL points to EDI/PASTA are skipped because those files are not
+    expected to be stored locally.
+
+    Returns the number of missing files that were flashed.
+    """
+    missing_count = 0
+
+    # --- data tables ---
+    data_table_nodes = []
+    eml_node.find_all_descendants(names.DATATABLE, data_table_nodes)
+    for data_table_node in data_table_nodes:
+        object_name = get_data_table_filename(data_table_node)
+        if not object_name:
+            continue
+        if not csv_file_exists(document_name, object_name):
+            # Skip tables hosted on EDI – they are not expected locally.
+            online_distribution_url_node = data_table_node.find_single_node_by_path(
+                [names.PHYSICAL, names.DISTRIBUTION, names.ONLINE, names.URL])
+            if online_distribution_url_node and \
+                    online_distribution_url_node.content and \
+                    Config.PASTA_URL in online_distribution_url_node.content:
+                continue
+            flash(missing_file_message(object_name), 'warning')
+            missing_count += 1
+
+    # --- other entities ---
+    other_entity_nodes = []
+    eml_node.find_all_descendants(names.OTHERENTITY, other_entity_nodes)
+    for other_entity_node in other_entity_nodes:
+        object_name_node = other_entity_node.find_single_node_by_path([names.PHYSICAL, names.OBJECTNAME])
+        if not object_name_node or not object_name_node.content:
+            continue
+        object_name = object_name_node.content
+        if not csv_file_exists(document_name, object_name):
+            flash(missing_file_message(object_name), 'warning')
+            missing_count += 1
+
+    return missing_count
+
+
 def get_data_file_eval_status(document_name, csv_file_name, metadata_hash):
     """ Determine the color of the badge for an individual data table in the Check Data Tables page."""
 
