@@ -1054,7 +1054,12 @@ def force_datetime_type(attribute_node):
     column_name = attribute_node.find_child(names.ATTRIBUTENAME).content
     data_frame = load_df(attribute_node, usecols=[column_name])
     if data_frame is None:
-        raise webapp.home.exceptions.DataFileNotFound("Data file not found.")
+        # No object name in the metadata – pass an empty string so callers can still produce a useful message
+        attribute_list_node = attribute_node.parent
+        data_table_node = attribute_list_node.parent
+        object_name_node = data_table_node.find_descendant(names.OBJECTNAME)
+        data_file = object_name_node.content if (object_name_node and object_name_node.content) else ''
+        raise webapp.home.exceptions.DataFileNotFound(data_file)
     if data_frame[column_name].size > 0:
         return infer_datetime_format(data_frame[column_name][0])
     else:

@@ -1188,15 +1188,17 @@ def missing_file_message(csv_file_name, html=False):
     Data Tables page.  When False (the default), a plain-text string is returned so it can
     be used safely in flash() calls.
     """
+    file_ref = f'<strong>{csv_file_name}</strong>' if csv_file_name else 'A data file'
+    file_ref_plain = f'"{csv_file_name}"' if csv_file_name else 'A data file'
     if html:
         data_tables_url = url_for(PAGE_DATA_TABLE_SELECT, filename=user_data.get_active_document())
         return (
-            f'The data file <strong>{csv_file_name}</strong> is not present on the server. '
+            f'The data file {file_ref} is not present on the server. '
             'This can happen when the file was removed during routine cleanup. '
             f'Please re-upload it from the <a href="{data_tables_url}">Data Tables page</a>.'
         )
     return (
-        f'The data file "{csv_file_name}" is not present on the server. '
+        f'The data file {file_ref_plain} is not present on the server. '
         'This can happen when the file was removed during routine cleanup. '
         'Please re-upload it from the Data Tables page.'
     )
