@@ -53,7 +53,7 @@ import webapp.home.metapype_client
 from webapp.home.home_utils import log_error, log_info, log_available_memory
 import webapp.home.utils.load_and_save
 from webapp.home.utils.security import validate_download_url
-from webapp.pages import PAGE_CHECK_DATA_TABLES, PAGE_DATA_TABLE_SELECT
+from webapp.pages import PAGE_CHECK_DATA_TABLES, PAGE_DATA_TABLE_SELECT, PAGE_OTHER_ENTITY_SELECT
 from webapp.utils import path_exists, path_isdir, path_join
 
 import webapp.auth.user_data as user_data
@@ -950,19 +950,21 @@ def set_check_data_tables_badge_status(document_name, eml_node):
 
 
 def flash_missing_data_files(document_name, eml_node):
-    """Flash a warning for every data file (data table or other entity) that is absent from the uploads folder.
+    """Flash a combined warning for any data files (data tables or other entities) absent from the uploads folder.
 
     Called immediately after a package is opened so the user sees actionable feedback on the Title page
     without having to navigate to Check Data Tables or Data Tables.
 
+    At most two flash messages are produced — one listing all missing data table files and one listing all
+    missing other-entity files — so the page is not flooded when many files are absent.
+
     Data tables whose distribution URL points to EDI/PASTA are skipped because those files are not
     expected to be stored locally.
 
-    Returns the number of missing files that were flashed.
+    Returns the total number of missing files found.
     """
-    missing_count = 0
-
     # --- data tables ---
+    missing_data_tables = []
     data_table_nodes = []
     eml_node.find_all_descendants(names.DATATABLE, data_table_nodes)
     for data_table_node in data_table_nodes:
@@ -977,10 +979,20 @@ def flash_missing_data_files(document_name, eml_node):
                     online_distribution_url_node.content and \
                     Config.PASTA_URL in online_distribution_url_node.content:
                 continue
-            flash(missing_file_message(object_name), 'warning')
-            missing_count += 1
+            missing_data_tables.append(object_name)
+
+    if missing_data_tables:
+        file_list = ', '.join(f'"{n}"' for n in missing_data_tables)
+        flash(
+            f'The following data {"file is" if len(missing_data_tables) == 1 else "files are"} not present on the '
+            f'server: {file_list}. '
+            'This can happen when files are removed during routine cleanup. '
+            'Please re-upload them from the Data Tables page.',
+            'warning'
+        )
 
     # --- other entities ---
+    missing_other_entities = []
     other_entity_nodes = []
     eml_node.find_all_descendants(names.OTHERENTITY, other_entity_nodes)
     for other_entity_node in other_entity_nodes:
@@ -989,10 +1001,19 @@ def flash_missing_data_files(document_name, eml_node):
             continue
         object_name = object_name_node.content
         if not csv_file_exists(document_name, object_name):
-            flash(missing_file_message(object_name), 'warning')
-            missing_count += 1
+            missing_other_entities.append(object_name)
 
-    return missing_count
+    if missing_other_entities:
+        file_list = ', '.join(f'"{n}"' for n in missing_other_entities)
+        flash(
+            f'The following other {"entity file is" if len(missing_other_entities) == 1 else "entity files are"} not '
+            f'present on the server: {file_list}. '
+            'This can happen when files are removed during routine cleanup. '
+            'Please re-upload them from the Other Entities page.',
+            'warning'
+        )
+
+    return len(missing_data_tables) + len(missing_other_entities)
 
 
 def get_data_file_eval_status(document_name, csv_file_name, metadata_hash):
