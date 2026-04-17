@@ -984,7 +984,7 @@ def flash_missing_data_files(document_name, eml_node):
     if missing_data_tables:
         file_list = ', '.join(f'"{n}"' for n in missing_data_tables)
         flash(
-            f'The following data {"file is" if len(missing_data_tables) == 1 else "files are"} not present on the '
+            f'The following data table {"file is" if len(missing_data_tables) == 1 else "files are"} not present on the '
             f'server: {file_list}. '
             'This can happen when files are removed during routine cleanup. '
             'Please re-upload them from the Data Tables page.',
