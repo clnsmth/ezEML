@@ -88,12 +88,6 @@ def other_entity_download(filename=None, oenode_id=None):
     if os.path.exists(filepath):
         return send_file(filepath, as_attachment=True)
     else:
-        flash(
-            f'The file "{object_name}" is not present on the server. '
-            'This can happen when the file was removed during routine cleanup. '
-            'Please re-upload it.',
-            'error'
-        )
         return redirect(url_for(PAGE_OTHER_ENTITY_SELECT, filename=filename))
 
 
