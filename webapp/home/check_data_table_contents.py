@@ -967,9 +967,6 @@ def should_flash_missing_data_files(document_name):
         return True
 
     json_filepath = path_join(user_data.get_user_folder_name(), f'{document_name}.json')
-    if not path_exists(json_filepath):
-        return True
-
     try:
         package_datetime = datetime.fromtimestamp(os.path.getmtime(json_filepath))
     except (FileNotFoundError, OSError):
