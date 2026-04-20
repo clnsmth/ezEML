@@ -951,7 +951,11 @@ def set_check_data_tables_badge_status(document_name, eml_node):
 
 
 def should_flash_missing_data_files(document_name):
-    """Return True if missing-file warnings should be shown for this package."""
+    """Return True if missing-file warnings should be shown for this package.
+
+    Uses Config.GC_LAST_COLLECTION_DATETIME as a cutoff timestamp in '%Y-%m-%d %H:%M:%S' format.
+    If the config value is unset, invalid, or the package JSON mtime can't be read, warnings remain enabled.
+    """
     gc_datetime_str = getattr(Config, 'GC_LAST_COLLECTION_DATETIME', None)
     if not gc_datetime_str:
         return True
@@ -966,7 +970,10 @@ def should_flash_missing_data_files(document_name):
     if not path_exists(json_filepath):
         return True
 
-    package_datetime = datetime.fromtimestamp(os.path.getmtime(json_filepath))
+    try:
+        package_datetime = datetime.fromtimestamp(os.path.getmtime(json_filepath))
+    except (FileNotFoundError, OSError):
+        return True
     return package_datetime <= gc_datetime
 
 
