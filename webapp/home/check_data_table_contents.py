@@ -72,6 +72,7 @@ from metapype.model.node import Node
 date_time_format_examples = {}
 date_time_format_regex = {}
 DATE_TIME_FORMAT_REGEX_FILENAME = 'webapp/static/dateTimeFormatString_regex.csv'
+GC_DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 
 def load_eml_file(eml_file_url:str):
@@ -953,7 +954,7 @@ def set_check_data_tables_badge_status(document_name, eml_node):
 def should_flash_missing_data_files(document_name):
     """Return True if missing-file warnings should be shown for this package.
 
-    Uses Config.GC_LAST_COLLECTION_DATETIME as a cutoff timestamp in '%Y-%m-%d %H:%M:%S' format.
+    Uses Config.GC_LAST_COLLECTION_DATETIME as a cutoff timestamp in GC_DATETIME_FORMAT.
     If the config value is unset, invalid, or the package JSON mtime can't be read, warnings remain enabled.
     """
     gc_datetime_str = getattr(Config, 'GC_LAST_COLLECTION_DATETIME', None)
@@ -961,7 +962,7 @@ def should_flash_missing_data_files(document_name):
         return True
 
     try:
-        gc_datetime = datetime.strptime(gc_datetime_str, '%Y-%m-%d %H:%M:%S')
+        gc_datetime = datetime.strptime(gc_datetime_str, GC_DATETIME_FORMAT)
     except ValueError:
         log_error(f'should_flash_missing_data_files: Invalid GC_LAST_COLLECTION_DATETIME: {gc_datetime_str}')
         return True
