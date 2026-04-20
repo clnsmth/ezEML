@@ -962,17 +962,17 @@ def should_flash_missing_data_files(document_name):
         return True
 
     try:
-        gc_datetime = datetime.strptime(gc_datetime_str, GC_DATETIME_FORMAT)
+        gc_cutoff_datetime = datetime.strptime(gc_datetime_str, GC_DATETIME_FORMAT)
     except ValueError:
         log_error(f'should_flash_missing_data_files: Invalid GC_LAST_COLLECTION_DATETIME: {gc_datetime_str}')
         return True
 
-    json_filepath = path_join(user_data.get_user_folder_name(), f'{document_name}.json')
+    package_json_path = path_join(user_data.get_user_folder_name(), f'{document_name}.json')
     try:
-        package_datetime = datetime.fromtimestamp(os.path.getmtime(json_filepath))
+        package_datetime = datetime.fromtimestamp(os.path.getmtime(package_json_path))
     except (FileNotFoundError, OSError):
         return True
-    return package_datetime <= gc_datetime
+    return package_datetime <= gc_cutoff_datetime
 
 
 def flash_missing_data_files(document_name, eml_node):
