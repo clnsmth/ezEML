@@ -958,25 +958,30 @@ def should_flash_missing_data_files(document_name):
     Uses Config.GC_LAST_COLLECTION_DATETIME as a cutoff timestamp in GC_DATETIME_FORMAT.
     If the config value is unset, invalid, or the package JSON mtime can't be read, warnings remain enabled.
     """
-    gc_datetime_str = None
+    gc_cutoff_datetime = None
     gc_date_pickle_path = path_join(Config.USER_DATA_DIR, 'GC_date.pkl')
     if path_exists(gc_date_pickle_path):
         try:
             with open(gc_date_pickle_path, 'rb') as f:
-                gc_datetime_str = pickle.load(f)
+                gc_cutoff_value = pickle.load(f)
+                if isinstance(gc_cutoff_value, datetime):
+                    gc_cutoff_datetime = gc_cutoff_value
+                elif isinstance(gc_cutoff_value, str):
+                    gc_cutoff_datetime = datetime.strptime(gc_cutoff_value, GC_DATETIME_FORMAT)
         except (pickle.UnpicklingError, EOFError, OSError):
-            gc_datetime_str = None
+            gc_cutoff_datetime = None
+        except ValueError:
+            gc_cutoff_datetime = None
 
-    if not gc_datetime_str:
+    if gc_cutoff_datetime is None:
         gc_datetime_str = getattr(Config, 'GC_LAST_COLLECTION_DATETIME', None)
-    if not gc_datetime_str:
-        return True
-
-    try:
-        gc_cutoff_datetime = datetime.strptime(gc_datetime_str, GC_DATETIME_FORMAT)
-    except ValueError:
-        log_error(f'should_flash_missing_data_files: Invalid GC_LAST_COLLECTION_DATETIME: {gc_datetime_str}')
-        return True
+        if not gc_datetime_str:
+            return True
+        try:
+            gc_cutoff_datetime = datetime.strptime(gc_datetime_str, GC_DATETIME_FORMAT)
+        except ValueError:
+            log_error(f'should_flash_missing_data_files: Invalid GC_LAST_COLLECTION_DATETIME: {gc_datetime_str}')
+            return True
 
     package_json_path = path_join(user_data.get_user_folder_name(), f'{document_name}.json')
     try:

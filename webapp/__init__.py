@@ -67,10 +67,10 @@ def update_gc_cutoff_date_pickle():
     try:
         with open(gc_log_path, 'r', encoding='utf-8') as f:
             for line in f:
-                if 'keep_uploads=False' not in line or 'logonly=False' not in line:
-                    continue
                 match = GC_START_RUN_REGEX.search(line)
                 if not match:
+                    continue
+                if 'keep_uploads=False' not in line or 'logonly=False' not in line:
                     continue
                 run_datetime = datetime.strptime(match.group('run_datetime'), GC_LOG_DATETIME_FORMAT)
                 days = int(match.group('days'))
@@ -86,7 +86,7 @@ def update_gc_cutoff_date_pickle():
 
     try:
         with open(gc_date_pickle_path, 'wb') as f:
-            pickle.dump(latest_gc_cutoff.strftime(GC_LOG_DATETIME_FORMAT), f)
+            pickle.dump(latest_gc_cutoff, f)
     except Exception as e:
         logger.error(f'Failed to write GC cutoff date to {gc_date_pickle_path}: {e}')
 
