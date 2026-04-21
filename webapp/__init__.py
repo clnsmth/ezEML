@@ -68,25 +68,34 @@ def update_gc_cutoff_date_pickle():
         # "YYYY-MM-DD HH:MM:SS,mmm __main__ -> Start run: ... days=<N> ... keep_uploads=False ... logonly=False"
         max_bytes = 2 * 1024 * 1024
         file_size = os.path.getsize(gc_log_path)
+
+        def scan_lines(lines, latest_cutoff):
+            for line in lines:
+                match = GC_START_RUN_REGEX.search(line)
+                if not match:
+                    continue
+                if 'keep_uploads=False' not in line or 'logonly=False' not in line:
+                    continue
+                run_datetime = datetime.strptime(match.group('run_datetime'), GC_LOG_DATETIME_FORMAT)
+                days = int(match.group('days'))
+                gc_cutoff_datetime = run_datetime - timedelta(days=days)
+                if latest_cutoff is None or gc_cutoff_datetime > latest_cutoff:
+                    latest_cutoff = gc_cutoff_datetime
+            return latest_cutoff
+
         if file_size > max_bytes:
             with open(gc_log_path, 'rb') as f:
                 f.seek(-max_bytes, os.SEEK_END)
-                lines = f.read().decode('utf-8', errors='ignore').splitlines()
+                latest_gc_cutoff = scan_lines(
+                    f.read().decode('utf-8', errors='ignore').splitlines(),
+                    latest_gc_cutoff
+                )
+            if latest_gc_cutoff is None:
+                with open(gc_log_path, 'r', encoding='utf-8') as f:
+                    latest_gc_cutoff = scan_lines(f, latest_gc_cutoff)
         else:
             with open(gc_log_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-
-        for line in lines:
-            match = GC_START_RUN_REGEX.search(line)
-            if not match:
-                continue
-            if 'keep_uploads=False' not in line or 'logonly=False' not in line:
-                continue
-            run_datetime = datetime.strptime(match.group('run_datetime'), GC_LOG_DATETIME_FORMAT)
-            days = int(match.group('days'))
-            gc_cutoff_datetime = run_datetime - timedelta(days=days)
-            if latest_gc_cutoff is None or gc_cutoff_datetime > latest_gc_cutoff:
-                latest_gc_cutoff = gc_cutoff_datetime
+                latest_gc_cutoff = scan_lines(f, latest_gc_cutoff)
     except Exception as e:
         logger.error(f'Failed to parse GC log file {gc_log_path}: {e}')
         return
