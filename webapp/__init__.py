@@ -55,9 +55,9 @@ GC_LOG_DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 
 def update_gc_cutoff_date_pickle():
-    """Parse the GC log and persist the most recent GC cutoff datetime in user-data/GC_date.pkl."""
+    """Parse the GC log and persist the most recent GC cutoff datetime in user-data/GC_date.pkl as plain text."""
     gc_log_path = os.path.join(Config.USER_DATA_DIR, 'ezEML_GC.log')
-    gc_date_pickle_path = os.path.join(Config.USER_DATA_DIR, 'GC_date.pkl')
+    gc_date_file_path = os.path.join(Config.USER_DATA_DIR, 'GC_date.pkl')
 
     if not os.path.exists(gc_log_path):
         return
@@ -95,10 +95,10 @@ def update_gc_cutoff_date_pickle():
         return
 
     try:
-        with open(gc_date_pickle_path, 'w', encoding='utf-8') as f:
+        with open(gc_date_file_path, 'w', encoding='utf-8') as f:
             f.write(latest_gc_cutoff.strftime(GC_LOG_DATETIME_FORMAT))
     except Exception as e:
-        logger.error(f'Failed to write GC cutoff date to {gc_date_pickle_path}: {e}')
+        logger.error(f'Failed to write GC cutoff date to {gc_date_file_path}: {e}')
 
 # Define the b64encode filter
 def b64encode(value):

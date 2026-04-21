@@ -958,10 +958,10 @@ def should_flash_missing_data_files(document_name):
     If the config value is unset, invalid, or the package JSON mtime can't be read, warnings remain enabled.
     """
     gc_cutoff_datetime = None
-    gc_date_pickle_path = path_join(Config.USER_DATA_DIR, 'GC_date.pkl')
-    if path_exists(gc_date_pickle_path):
+    gc_date_file_path = path_join(Config.USER_DATA_DIR, 'GC_date.pkl')
+    if path_exists(gc_date_file_path):
         try:
-            with open(gc_date_pickle_path, 'r', encoding='utf-8') as f:
+            with open(gc_date_file_path, 'r', encoding='utf-8') as f:
                 gc_cutoff_value = f.read().strip()
             if gc_cutoff_value:
                 gc_cutoff_datetime = datetime.strptime(gc_cutoff_value, GC_DATETIME_FORMAT)
