@@ -13,10 +13,12 @@
     2/15/18
 """
 import base64
-from datetime import timedelta
+from datetime import datetime, timedelta
 import json
 import logging
 import os
+import pickle
+import re
 
 import daiquiri.formatter
 
@@ -45,6 +47,45 @@ logger = daiquiri.getLogger(__name__)
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+
+GC_START_RUN_REGEX = re.compile(
+    r'^(?P<run_datetime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d+\s+__main__ -> Start run:.*\bdays=(?P<days>\d+)\b.*\bkeep_uploads=False\b.*\blogonly=False\b'
+)
+GC_LOG_DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+
+def update_gc_cutoff_date_pickle():
+    """Parse the GC log and persist the most recent GC cutoff datetime in user-data/GC_date.pkl."""
+    gc_log_path = os.path.join(Config.USER_DATA_DIR, 'ezEML_GC.log')
+    gc_date_pickle_path = os.path.join(Config.USER_DATA_DIR, 'GC_date.pkl')
+
+    if not os.path.exists(gc_log_path):
+        return
+
+    latest_gc_cutoff = None
+    try:
+        with open(gc_log_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                match = GC_START_RUN_REGEX.search(line)
+                if not match:
+                    continue
+                run_datetime = datetime.strptime(match.group('run_datetime'), GC_LOG_DATETIME_FORMAT)
+                days = int(match.group('days'))
+                gc_cutoff_datetime = run_datetime - timedelta(days=days)
+                latest_gc_cutoff = gc_cutoff_datetime
+    except Exception as e:
+        logger.error(f'Failed to parse GC log file {gc_log_path}: {e}')
+        return
+
+    if latest_gc_cutoff is None:
+        return
+
+    try:
+        with open(gc_date_pickle_path, 'wb') as f:
+            pickle.dump(latest_gc_cutoff.strftime(GC_LOG_DATETIME_FORMAT), f)
+    except Exception as e:
+        logger.error(f'Failed to write GC cutoff date to {gc_date_pickle_path}: {e}')
 
 # Define the b64encode filter
 def b64encode(value):
@@ -183,3 +224,4 @@ def download_qudt_annotations_data_file():
         logger.error(f'Failed to download QUDT annotations data file: {e}')
 
 download_qudt_annotations_data_file()
+update_gc_cutoff_date_pickle()

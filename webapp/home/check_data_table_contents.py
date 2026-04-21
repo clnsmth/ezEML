@@ -31,6 +31,7 @@ so we want to know as quickly as possible what the error check status is for eac
 """
 
 import os
+import pickle
 
 from collections import OrderedDict
 import csv
@@ -957,7 +958,17 @@ def should_flash_missing_data_files(document_name):
     Uses Config.GC_LAST_COLLECTION_DATETIME as a cutoff timestamp in GC_DATETIME_FORMAT.
     If the config value is unset, invalid, or the package JSON mtime can't be read, warnings remain enabled.
     """
-    gc_datetime_str = getattr(Config, 'GC_LAST_COLLECTION_DATETIME', None)
+    gc_datetime_str = None
+    gc_date_pickle_path = path_join(Config.USER_DATA_DIR, 'GC_date.pkl')
+    if path_exists(gc_date_pickle_path):
+        try:
+            with open(gc_date_pickle_path, 'rb') as f:
+                gc_datetime_str = pickle.load(f)
+        except (pickle.UnpicklingError, EOFError, OSError):
+            gc_datetime_str = None
+
+    if not gc_datetime_str:
+        gc_datetime_str = getattr(Config, 'GC_LAST_COLLECTION_DATETIME', None)
     if not gc_datetime_str:
         return True
 
