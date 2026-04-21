@@ -165,13 +165,15 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool) -> list[ErrorEve
                     function = "unknown"
                     exception = message
                     traceback_lines: list[str] = []
+                    used_traceback_context = False
                     if tb_ctx and tb_ctx.timestamp and current_ts - tb_ctx.timestamp <= MAX_CORRELATION_WINDOW:
+                        used_traceback_context = True
                         function = tb_ctx.function
                         exception = tb_ctx.exception
                         traceback_lines = tb_ctx.lines
 
                     # Keep traceback-derived function context when logger is generic.
-                    if logger_name and logger_name != GENERIC_LOGGER_NAME and function == "unknown":
+                    if logger_name and logger_name != GENERIC_LOGGER_NAME and not used_traceback_context:
                         function = logger_name
 
                     events.append(
@@ -211,7 +213,6 @@ def summarize(
         print("No matching errors were found.")
         return
 
-    events = sorted(events, key=lambda e: e.timestamp)
     first_ts = events[0].timestamp
     last_ts = events[-1].timestamp
 
@@ -221,10 +222,21 @@ def summarize(
     by_day = Counter(event.timestamp.strftime("%Y-%m-%d") for event in events)
 
     now = last_ts
-    in_last_24h = sum(1 for event in events if now - event.timestamp <= timedelta(hours=24))
-    in_prev_24h = sum(1 for event in events if timedelta(hours=24) < (now - event.timestamp) <= timedelta(hours=48))
-    in_last_7d = sum(1 for event in events if now - event.timestamp <= timedelta(days=7))
-    in_prev_7d = sum(1 for event in events if timedelta(days=7) < (now - event.timestamp) <= timedelta(days=14))
+    in_last_24h = 0
+    in_prev_24h = 0
+    in_last_7d = 0
+    in_prev_7d = 0
+    for event in events:
+        age = now - event.timestamp
+        if age <= timedelta(hours=24):
+            in_last_24h += 1
+        elif age <= timedelta(hours=48):
+            in_prev_24h += 1
+
+        if age <= timedelta(days=7):
+            in_last_7d += 1
+        elif age <= timedelta(days=14):
+            in_prev_7d += 1
 
     print(f"Matched errors: {len(events)}")
     print(f"Time range: {first_ts} to {last_ts}")
@@ -310,9 +322,10 @@ def main() -> None:
 
     args = parser.parse_args()
     events = parse_log(args.log_file, args.error_pattern, not args.case_sensitive)
+    events = sorted(events, key=lambda e: e.timestamp)
 
     if args.max_errors > 0:
-        events = sorted(events, key=lambda e: e.timestamp)[-args.max_errors:]
+        events = events[-args.max_errors:]
 
     summarize(
         events=events,
