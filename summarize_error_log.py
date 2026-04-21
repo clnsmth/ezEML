@@ -20,6 +20,7 @@ LOG_HEADER_RE = re.compile(
 
 REQUEST_RE = re.compile(r"\*\*\*\* INCOMING REQUEST:\s+(?P<url>\S+)\s+\[(?P<method>[A-Z]+)\]")
 TRACE_FRAME_RE = re.compile(r'^\s*File "(?P<file>[^"]+)", line (?P<line>\d+), in (?P<func>.+)$')
+# Correlate request/traceback context close in time to the logged error event.
 MAX_CORRELATION_WINDOW = timedelta(minutes=30)
 
 
@@ -63,7 +64,7 @@ def parse_traceback(traceback_lines: list[str]) -> tuple[str, str]:
 
     function = "unknown"
     if frames:
-        preferred = [frame for frame in frames if "/webapp/" in frame[0] or "/ezEML/" in frame[0] or "/ezeml/" in frame[0]]
+        preferred = [frame for frame in frames if "/webapp/" in frame[0].lower() or "/ezeml/" in frame[0].lower()]
         chosen = preferred[-1] if preferred else frames[-1]
         function = f"{chosen[1]} ({chosen[0]})"
 
@@ -168,8 +169,8 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool) -> list[ErrorEve
                         traceback_lines = tb_ctx.lines
 
                     # Keep traceback-derived function context when logger is generic ("webapp").
-                    if logger_name and logger_name != "webapp":
-                        function = function if function != "unknown" else logger_name
+                    if logger_name and logger_name != "webapp" and function == "unknown":
+                        function = logger_name
 
                     events.append(
                         ErrorEvent(
