@@ -31,7 +31,6 @@ so we want to know as quickly as possible what the error check status is for eac
 """
 
 import os
-import pickle
 
 from collections import OrderedDict
 import csv
@@ -962,13 +961,11 @@ def should_flash_missing_data_files(document_name):
     gc_date_pickle_path = path_join(Config.USER_DATA_DIR, 'GC_date.pkl')
     if path_exists(gc_date_pickle_path):
         try:
-            with open(gc_date_pickle_path, 'rb') as f:
-                gc_cutoff_value = pickle.load(f)
-                if isinstance(gc_cutoff_value, datetime):
-                    gc_cutoff_datetime = gc_cutoff_value
-                elif isinstance(gc_cutoff_value, str):
-                    gc_cutoff_datetime = datetime.strptime(gc_cutoff_value, GC_DATETIME_FORMAT)
-        except (pickle.UnpicklingError, EOFError, OSError):
+            with open(gc_date_pickle_path, 'r', encoding='utf-8') as f:
+                gc_cutoff_value = f.read().strip()
+            if gc_cutoff_value:
+                gc_cutoff_datetime = datetime.strptime(gc_cutoff_value, GC_DATETIME_FORMAT)
+        except OSError:
             gc_cutoff_datetime = None
         except ValueError:
             gc_cutoff_datetime = None
