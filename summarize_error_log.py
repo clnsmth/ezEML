@@ -20,6 +20,7 @@ LOG_HEADER_RE = re.compile(
 
 REQUEST_RE = re.compile(r"\*\*\*\* INCOMING REQUEST:\s+(?P<url>\S+)\s+\[(?P<method>[A-Z]+)\]")
 TRACE_FRAME_RE = re.compile(r'^\s*File "(?P<file>[^"]+)", line (?P<line>\d+), in (?P<func>.+)$')
+MAX_CORRELATION_WINDOW = timedelta(minutes=30)
 
 
 @dataclass
@@ -141,7 +142,10 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool) -> list[ErrorEve
                 user = header_match.group("user") or "unknown"
                 rest = header_match.group("rest")
 
-                logger_name, message = (rest.split(" -> ", 1) + [""])[:2] if " -> " in rest else ("", rest)
+                logger_name = ""
+                message = rest
+                if " -> " in rest:
+                    logger_name, message = rest.split(" -> ", 1)
 
                 request_match = REQUEST_RE.search(message)
                 if request_match:
@@ -151,18 +155,19 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool) -> list[ErrorEve
                 if error_re.search(message):
                     route = "unknown"
                     req_ctx = last_request_by_pid.get(current_pid)
-                    if req_ctx and current_ts - req_ctx.timestamp <= timedelta(minutes=30):
+                    if req_ctx and current_ts - req_ctx.timestamp <= MAX_CORRELATION_WINDOW:
                         route = req_ctx.route
 
                     tb_ctx = last_traceback_by_pid.get(current_pid)
                     function = "unknown"
                     exception = message
                     traceback_lines: list[str] = []
-                    if tb_ctx and tb_ctx.timestamp and current_ts - tb_ctx.timestamp <= timedelta(minutes=30):
+                    if tb_ctx and tb_ctx.timestamp and current_ts - tb_ctx.timestamp <= MAX_CORRELATION_WINDOW:
                         function = tb_ctx.function
                         exception = tb_ctx.exception
                         traceback_lines = tb_ctx.lines
 
+                    # Keep traceback-derived function context when logger is generic ("webapp").
                     if logger_name and logger_name != "webapp":
                         function = function if function != "unknown" else logger_name
 
