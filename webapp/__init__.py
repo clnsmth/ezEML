@@ -50,7 +50,7 @@ app.config.from_object(Config)
 
 
 GC_START_RUN_REGEX = re.compile(
-    r'^(?P<run_datetime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d+\s+__main__ -> Start run:.*\bdays=(?P<days>\d+)\b.*\bkeep_uploads=False\b.*\blogonly=False\b'
+    r'^(?P<run_datetime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d+\s+__main__ -> Start run:.*\bdays=(?P<days>\d+)\b'
 )
 GC_LOG_DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
@@ -67,13 +67,16 @@ def update_gc_cutoff_date_pickle():
     try:
         with open(gc_log_path, 'r', encoding='utf-8') as f:
             for line in f:
+                if 'keep_uploads=False' not in line or 'logonly=False' not in line:
+                    continue
                 match = GC_START_RUN_REGEX.search(line)
                 if not match:
                     continue
                 run_datetime = datetime.strptime(match.group('run_datetime'), GC_LOG_DATETIME_FORMAT)
                 days = int(match.group('days'))
                 gc_cutoff_datetime = run_datetime - timedelta(days=days)
-                latest_gc_cutoff = gc_cutoff_datetime
+                if latest_gc_cutoff is None or gc_cutoff_datetime > latest_gc_cutoff:
+                    latest_gc_cutoff = gc_cutoff_datetime
     except Exception as e:
         logger.error(f'Failed to parse GC log file {gc_log_path}: {e}')
         return
