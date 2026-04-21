@@ -22,6 +22,8 @@ REQUEST_RE = re.compile(r"\*\*\*\* INCOMING REQUEST:\s+(?P<url>\S+)\s+\[(?P<meth
 TRACE_FRAME_RE = re.compile(r'^\s*File "(?P<file>[^"]+)", line (?P<line>\d+), in (?P<func>.+)$')
 # Correlate request/traceback context close in time to the logged error event.
 MAX_CORRELATION_WINDOW = timedelta(minutes=30)
+PREFERRED_PATH_PATTERNS = ("/webapp/", "/ezeml/")
+GENERIC_LOGGER_NAME = "webapp"
 
 
 @dataclass
@@ -64,7 +66,7 @@ def parse_traceback(traceback_lines: list[str]) -> tuple[str, str]:
 
     function = "unknown"
     if frames:
-        preferred = [frame for frame in frames if "/webapp/" in frame[0].lower() or "/ezeml/" in frame[0].lower()]
+        preferred = [frame for frame in frames if any(pattern in frame[0].lower() for pattern in PREFERRED_PATH_PATTERNS)]
         chosen = preferred[-1] if preferred else frames[-1]
         function = f"{chosen[1]} ({chosen[0]})"
 
@@ -168,8 +170,8 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool) -> list[ErrorEve
                         exception = tb_ctx.exception
                         traceback_lines = tb_ctx.lines
 
-                    # Keep traceback-derived function context when logger is generic ("webapp").
-                    if logger_name and logger_name != "webapp" and function == "unknown":
+                    # Keep traceback-derived function context when logger is generic.
+                    if logger_name and logger_name != GENERIC_LOGGER_NAME and function == "unknown":
                         function = logger_name
 
                     events.append(
@@ -248,6 +250,18 @@ def summarize(
 
 
 def main() -> None:
+    def positive_int(value: str) -> int:
+        integer = int(value)
+        if integer < 1:
+            raise argparse.ArgumentTypeError("Value must be >= 1.")
+        return integer
+
+    def nonnegative_int(value: str) -> int:
+        integer = int(value)
+        if integer < 0:
+            raise argparse.ArgumentTypeError("Value must be >= 0.")
+        return integer
+
     parser = argparse.ArgumentParser(
         description=(
             "Summarize matching server errors from ezEML logs, including route/function/traceback context."
@@ -271,25 +285,25 @@ def main() -> None:
     )
     parser.add_argument(
         "--max-errors",
-        type=int,
+        type=positive_int,
         default=500,
         help="Analyze at most the most recent N matching errors (default: 500)",
     )
     parser.add_argument(
         "--top",
-        type=int,
+        type=positive_int,
         default=10,
         help="Show top N rows in summary tables (default: 10)",
     )
     parser.add_argument(
         "--show-recent",
-        type=int,
+        type=nonnegative_int,
         default=10,
         help="Show details for the most recent N matching errors (default: 10)",
     )
     parser.add_argument(
         "--traceback-lines",
-        type=int,
+        type=nonnegative_int,
         default=0,
         help="Include the last N lines of traceback for each recent error (default: 0)",
     )
@@ -302,9 +316,9 @@ def main() -> None:
 
     summarize(
         events=events,
-        top_n=max(args.top, 1),
-        show_recent=max(args.show_recent, 0),
-        show_traceback_lines=max(args.traceback_lines, 0),
+        top_n=args.top,
+        show_recent=args.show_recent,
+        show_traceback_lines=args.traceback_lines,
     )
 
 
