@@ -51,6 +51,7 @@ class ErrorEvent:
     exception: str
     status_message: str
     traceback_lines: list[str]
+    preceding_line: Optional[str] = None
 
 
 def parse_timestamp(value: str) -> datetime:
@@ -107,6 +108,7 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool) -> list[ErrorEve
     events: list[ErrorEvent] = []
     last_request_by_pid: dict[str, RequestContext] = {}
     last_traceback_by_pid: dict[str, TracebackContext] = {}
+    last_timestamped_record_by_pid: dict[str, str] = {}
 
     traceback_buffer: list[str] = []
     traceback_context_ts: Optional[datetime] = None
@@ -144,6 +146,10 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool) -> list[ErrorEve
                 current_pid = header_match.group("pid")
                 user = header_match.group("user") or "unknown"
                 rest = header_match.group("rest")
+
+                # Capture the preceding timestamped record for this PID before
+                # updating the dict with the current line.
+                preceding_line = last_timestamped_record_by_pid.get(current_pid)
 
                 logger_name = ""
                 message = rest
@@ -186,8 +192,12 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool) -> list[ErrorEve
                             exception=exception,
                             status_message=message,
                             traceback_lines=traceback_lines,
+                            preceding_line=preceding_line,
                         )
                     )
+
+                # Update the last-seen timestamped record for this PID.
+                last_timestamped_record_by_pid[current_pid] = line
                 continue
 
             if line.startswith("Traceback (most recent call last):"):
@@ -251,6 +261,8 @@ def summarize(
     print(f"\nMost recent {min(show_recent, len(events))} matching errors:")
     for event in events[-show_recent:]:
         print(f"\n- {event.timestamp} | PID {event.pid} | user={event.user}")
+        if event.preceding_line is not None:
+            print(f"  Prev     : {event.preceding_line}")
         print(f"  Route    : {event.route}")
         print(f"  Function : {event.function}")
         print(f"  Exception: {event.exception}")
