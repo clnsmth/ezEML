@@ -226,7 +226,6 @@ def summarize(
     first_ts = events[0].timestamp
     last_ts = events[-1].timestamp
 
-    by_route = Counter(event.route for event in events)
     by_function = Counter(event.function for event in events)
     by_exception = Counter(event.exception for event in events)
     by_day = Counter(event.timestamp.strftime("%Y-%m-%d") for event in events)
@@ -253,7 +252,6 @@ def summarize(
     print(f"Last 24h: {in_last_24h} (previous 24h: {in_prev_24h})")
     print(f"Last 7d : {in_last_7d} (previous 7d : {in_prev_7d})")
 
-    print_top("Top routes", by_route, top_n)
     print_top("Top functions", by_function, top_n)
     print_top("Top exceptions", by_exception, top_n)
     print_top("Counts by day", by_day, top_n)
@@ -263,7 +261,6 @@ def summarize(
         print(f"\n- {event.timestamp} | PID {event.pid} | user={event.user}")
         if event.preceding_line is not None:
             print(f"  Prev     : {event.preceding_line}")
-        print(f"  Route    : {event.route}")
         print(f"  Function : {event.function}")
         print(f"  Exception: {event.exception}")
         print(f"  Status   : {event.status_message}")
