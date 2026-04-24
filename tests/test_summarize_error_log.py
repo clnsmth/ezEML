@@ -1,4 +1,4 @@
-"""Tests for summarize_error_log.py – preceding-context capture and display."""
+"""Tests for ezeml_log_tools – preceding-context capture and display (summarize path)."""
 
 import io
 import os
@@ -7,7 +7,7 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from summarize_error_log import parse_log, summarize  # noqa: E402
+from ezeml_log_tools import parse_log, summarize  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Sample log fragments
