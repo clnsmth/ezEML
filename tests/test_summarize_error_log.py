@@ -171,3 +171,16 @@ def test_summarize_preceding_line_with_traceback_enabled():
     for output in (output_no_tb, output_with_tb):
         assert "Prev" in output
         assert "Exception on /eml/check_data_tables [POST]" in output
+
+
+def test_summarize_no_route_in_output():
+    """summarize() does not print 'Top routes' section or per-event Route field."""
+    path = _write_tmp(SAMPLE_LOG_PRECEDING)
+    try:
+        events = parse_log(path, r"500 Internal Server Error", ignore_case=False)
+    finally:
+        os.unlink(path)
+
+    output = _capture_summarize(events)
+    assert "Top routes" not in output
+    assert "Route    :" not in output
