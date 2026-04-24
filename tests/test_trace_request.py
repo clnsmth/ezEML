@@ -1,4 +1,4 @@
-"""Tests for trace_request.py – request-trace deep-dive functionality."""
+"""Tests for ezeml_log_tools – request-trace deep-dive functionality (trace path)."""
 
 import os
 import sys
@@ -6,7 +6,7 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from trace_request import get_request_trace, print_trace  # noqa: E402
+from ezeml_log_tools import get_request_trace, print_trace  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
