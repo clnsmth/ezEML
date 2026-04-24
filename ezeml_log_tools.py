@@ -27,7 +27,7 @@ Summarize all 500 errors in a log file::
 Summarize with a custom pattern and show the last 20 errors::
 
     python ezeml_log_tools.py summarize webapp/ezeml-log.txt \\
-        --error-pattern "InternalServerError" \\
+        --error-pattern "500 Internal Server Error" \\
         --show-recent 20
 
 Show the request trace for the most recent 500 error::
