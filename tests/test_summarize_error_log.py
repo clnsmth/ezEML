@@ -7,7 +7,7 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from summarize_error_log import parse_log, summarize  # noqa: E402
+from summarize_error_log import parse_log, print_traces, summarize, trace_to_request  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Sample log fragments
@@ -184,3 +184,164 @@ def test_summarize_no_route_in_output():
     output = _capture_summarize(events)
     assert "Top routes" not in output
     assert "Route    :" not in output
+
+
+# ---------------------------------------------------------------------------
+# trace_to_request tests
+# ---------------------------------------------------------------------------
+
+SAMPLE_LOG_TRACE_BASIC = """\
+2026-04-17 10:00:00,000 [PID 100] [INFO] webapp -> **** INCOMING REQUEST: /eml/save [POST]
+2026-04-17 10:00:00,100 [PID 100] [INFO] webapp -> step A
+2026-04-17 10:00:00,200 [PID 100] [ERROR] webapp -> 500 Internal Server Error
+""".encode()
+
+SAMPLE_LOG_TRACE_MULTI_PID = """\
+2026-04-17 11:00:00,000 [PID 200] [INFO] webapp -> **** INCOMING REQUEST: /eml/load [GET]
+2026-04-17 11:00:00,050 [PID 300] [INFO] webapp -> **** INCOMING REQUEST: /eml/save [POST]
+2026-04-17 11:00:00,100 [PID 200] [INFO] webapp -> step A pid 200
+2026-04-17 11:00:00,150 [PID 300] [INFO] webapp -> step A pid 300
+2026-04-17 11:00:00,200 [PID 200] [ERROR] webapp -> 500 Internal Server Error
+""".encode()
+
+SAMPLE_LOG_TRACE_NO_REQUEST = """\
+2026-04-17 12:00:00,000 [PID 400] [ERROR] webapp -> 500 Internal Server Error
+""".encode()
+
+SAMPLE_LOG_TRACE_WITH_TRACEBACK = """\
+2026-04-17 13:00:00,000 [PID 500] [INFO] webapp -> **** INCOMING REQUEST: /eml/check [POST]
+2026-04-17 13:00:00,100 [PID 500] [ERROR] webapp -> Something went wrong
+Traceback (most recent call last):
+  File "/webapp/views.py", line 10, in check
+    do_check()
+ValueError: bad input
+2026-04-17 13:00:00,200 [PID 500] [ERROR] webapp -> 500 Internal Server Error
+""".encode()
+
+SAMPLE_LOG_TRACE_MULTI_MATCHES = """\
+2026-04-17 14:00:00,000 [PID 600] [INFO] webapp -> **** INCOMING REQUEST: /eml/a [POST]
+2026-04-17 14:00:00,100 [PID 600] [ERROR] webapp -> 500 Internal Server Error
+2026-04-17 14:00:01,000 [PID 600] [INFO] webapp -> **** INCOMING REQUEST: /eml/b [POST]
+2026-04-17 14:00:01,100 [PID 600] [INFO] webapp -> step B
+2026-04-17 14:00:01,200 [PID 600] [ERROR] webapp -> 500 Internal Server Error
+""".encode()
+
+
+def test_trace_basic_sequence():
+    """trace_to_request returns lines from INCOMING REQUEST through the match."""
+    path = _write_tmp(SAMPLE_LOG_TRACE_BASIC)
+    try:
+        traces = trace_to_request(path, r"500 Internal Server Error", ignore_case=False)
+    finally:
+        os.unlink(path)
+
+    assert len(traces) == 1
+    trace = traces[0]
+    assert any("INCOMING REQUEST" in line for line in trace)
+    assert any("step A" in line for line in trace)
+    assert any("500 Internal Server Error" in line for line in trace)
+    # INCOMING REQUEST must come before the error
+    request_idx = next(i for i, l in enumerate(trace) if "INCOMING REQUEST" in l)
+    error_idx = next(i for i, l in enumerate(trace) if "500 Internal Server Error" in l)
+    assert request_idx < error_idx
+
+
+def test_trace_only_same_pid_lines():
+    """trace_to_request excludes lines from other PIDs."""
+    path = _write_tmp(SAMPLE_LOG_TRACE_MULTI_PID)
+    try:
+        traces = trace_to_request(path, r"500 Internal Server Error", ignore_case=False)
+    finally:
+        os.unlink(path)
+
+    assert len(traces) == 1
+    trace = traces[0]
+    for line in trace:
+        assert "PID 300" not in line, "PID 300 line should not appear in PID 200 trace"
+    assert any("PID 200" in line for line in trace)
+
+
+def test_trace_no_preceding_request():
+    """When no INCOMING REQUEST precedes the match, trace contains only the match."""
+    path = _write_tmp(SAMPLE_LOG_TRACE_NO_REQUEST)
+    try:
+        traces = trace_to_request(path, r"500 Internal Server Error", ignore_case=False)
+    finally:
+        os.unlink(path)
+
+    assert len(traces) == 1
+    trace = traces[0]
+    assert len(trace) == 1
+    assert "500 Internal Server Error" in trace[0]
+    assert "INCOMING REQUEST" not in trace[0]
+
+
+def test_trace_includes_traceback_continuation():
+    """Traceback continuation lines (no timestamp) are included in the trace."""
+    path = _write_tmp(SAMPLE_LOG_TRACE_WITH_TRACEBACK)
+    try:
+        traces = trace_to_request(path, r"500 Internal Server Error", ignore_case=False)
+    finally:
+        os.unlink(path)
+
+    assert len(traces) == 1
+    trace = traces[0]
+    assert any("INCOMING REQUEST" in line for line in trace)
+    assert any("Traceback" in line for line in trace)
+    assert any("ValueError" in line for line in trace)
+    assert any("500 Internal Server Error" in line for line in trace)
+
+
+def test_trace_multiple_matches_separate_traces():
+    """Each distinct INCOMING REQUEST → match pair produces its own trace."""
+    path = _write_tmp(SAMPLE_LOG_TRACE_MULTI_MATCHES)
+    try:
+        traces = trace_to_request(path, r"500 Internal Server Error", ignore_case=False)
+    finally:
+        os.unlink(path)
+
+    assert len(traces) == 2
+    # First trace should reference /eml/a
+    assert any("/eml/a" in line for line in traces[0])
+    # Second trace should reference /eml/b
+    assert any("/eml/b" in line for line in traces[1])
+
+
+def _capture_print_traces(traces, max_traces=10):
+    """Run print_traces() and return captured stdout as a string."""
+    captured = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = captured
+    try:
+        print_traces(traces, max_traces)
+    finally:
+        sys.stdout = old_stdout
+    return captured.getvalue()
+
+
+def test_print_traces_no_matches():
+    """print_traces() reports when there are no traces."""
+    output = _capture_print_traces([])
+    assert "No matching events found" in output
+
+
+def test_print_traces_output_format():
+    """print_traces() labels each trace and includes all lines."""
+    traces = [
+        ["line A1", "line A2"],
+        ["line B1", "line B2", "line B3"],
+    ]
+    output = _capture_print_traces(traces, max_traces=10)
+    assert "Trace 1 of 2" in output
+    assert "Trace 2 of 2" in output
+    assert "line A1" in output
+    assert "line B3" in output
+
+
+def test_print_traces_max_traces_limits_output():
+    """print_traces() respects max_traces and shows only the most recent."""
+    traces = [["line%d" % i] for i in range(5)]
+    output = _capture_print_traces(traces, max_traces=2)
+    assert "Trace 1 of 2" in output
+    assert "line4" in output  # most recent
+    assert "line0" not in output  # older ones omitted
