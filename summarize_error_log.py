@@ -270,6 +270,81 @@ def summarize(
                 print(f"    {tb_line}")
 
 
+def trace_to_request(
+    path: str,
+    error_pattern: str,
+    ignore_case: bool,
+) -> list[list[str]]:
+    """Return log sequences from the nearest INCOMING REQUEST to each pattern match.
+
+    For every line in *path* that matches *error_pattern*, collects all lines for
+    the same PID beginning at the closest preceding ``**** INCOMING REQUEST:`` line
+    through the matched line.  Lines from other PIDs that appear in between are
+    excluded so each trace contains only the logical activity thread for that request.
+    If no INCOMING REQUEST was seen for a PID before a match, the trace contains
+    just the matching line.
+    """
+    flags = re.IGNORECASE if ignore_case else 0
+    error_re = re.compile(error_pattern, flags)
+
+    traces: list[list[str]] = []
+    buffer_by_pid: dict[str, list[str]] = {}
+    current_pid: Optional[str] = None
+
+    with open(path, "rb") as infile:
+        for raw_line in infile:
+            line = raw_line.decode("utf-8", errors="replace").rstrip("\n")
+            header_match = LOG_HEADER_RE.match(line)
+
+            if header_match:
+                current_pid = header_match.group("pid")
+                rest = header_match.group("rest")
+
+                message = rest
+                if " -> " in rest:
+                    _, message = rest.split(" -> ", 1)
+
+                if REQUEST_RE.search(message):
+                    # Start a fresh buffer for this PID at the INCOMING REQUEST line.
+                    buffer_by_pid[current_pid] = [line]
+                else:
+                    # Append to the active buffer for this PID (if one exists).
+                    if current_pid in buffer_by_pid:
+                        buffer_by_pid[current_pid].append(line)
+
+                    if error_re.search(message):
+                        if current_pid in buffer_by_pid:
+                            # The matching line is already in the buffer; emit it.
+                            traces.append(buffer_by_pid.pop(current_pid))
+                        else:
+                            # No preceding INCOMING REQUEST seen for this PID.
+                            traces.append([line])
+            else:
+                # Continuation line (traceback, etc.) — append to active buffer.
+                if current_pid and current_pid in buffer_by_pid:
+                    buffer_by_pid[current_pid].append(line)
+
+    return traces
+
+
+def print_traces(traces: list[list[str]], max_traces: int) -> None:
+    """Print request traces produced by :func:`trace_to_request`."""
+    if not traces:
+        print("No matching events found.")
+        return
+
+    recent = traces[-max_traces:]
+    print(
+        f"Found {len(traces)} matching sequence(s)."
+        f" Showing most recent {len(recent)}:\n"
+    )
+    for i, trace in enumerate(recent, 1):
+        print(f"=== Trace {i} of {len(recent)} ===")
+        for trace_line in trace:
+            print(trace_line)
+        print()
+
+
 def main() -> None:
     def positive_int(value: str) -> int:
         integer = int(value)
@@ -328,8 +403,29 @@ def main() -> None:
         default=0,
         help="Include the last N lines of traceback for each recent error (default: 0)",
     )
+    parser.add_argument(
+        "--trace",
+        action="store_true",
+        help=(
+            "Trace mode: for each pattern match show every log line "
+            "for the same PID from the nearest preceding "
+            "'**** INCOMING REQUEST:' through the matched line"
+        ),
+    )
+    parser.add_argument(
+        "--max-traces",
+        type=positive_int,
+        default=10,
+        help="In --trace mode, show at most the most recent N traces (default: 10)",
+    )
 
     args = parser.parse_args()
+
+    if args.trace:
+        traces = trace_to_request(args.log_file, args.error_pattern, not args.case_sensitive)
+        print_traces(traces, args.max_traces)
+        return
+
     events = parse_log(args.log_file, args.error_pattern, not args.case_sensitive)
     events = sorted(events, key=lambda e: e.timestamp)
 
