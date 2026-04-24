@@ -700,7 +700,7 @@ def _build_summarize_parser(subparsers: argparse.Action) -> None:
             raise argparse.ArgumentTypeError("Value must be >= 1.")
         return integer
 
-    def nonneg_int(value: str) -> int:
+    def nonnegative_int(value: str) -> int:
         integer = int(value)
         if integer < 0:
             raise argparse.ArgumentTypeError("Value must be >= 0.")
@@ -720,13 +720,13 @@ def _build_summarize_parser(subparsers: argparse.Action) -> None:
     )
     p.add_argument(
         "--show-recent",
-        type=nonneg_int,
+        type=nonnegative_int,
         default=10,
         help="Show details for the most-recent N matching errors (default: 10)",
     )
     p.add_argument(
         "--traceback-lines",
-        type=nonneg_int,
+        type=nonnegative_int,
         default=0,
         help="Include the last N traceback lines per detail entry (default: 0)",
     )
