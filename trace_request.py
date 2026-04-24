@@ -49,6 +49,7 @@ def get_request_trace(
     pattern: str,
     ignore_case: bool = True,
     occurrence: int = -1,
+    literal: bool = False,
 ) -> list[str]:
     """Return the log lines from the nearest INCOMING REQUEST to a pattern match.
 
@@ -59,12 +60,19 @@ def get_request_trace(
     as tracebacks are included because they carry no PID header of their own
     and are therefore always attributed to the preceding PID.
 
+    The pattern is matched against the **full raw log line** so that users can
+    paste any portion of a log entry — including timestamp, PID, level, and
+    user fields — as their search string.
+
     Parameters
     ----------
     path:
         Path to the log file.
     pattern:
-        Regular-expression pattern to identify the error line of interest.
+        Search string used to identify the error line of interest.  Treated as
+        a regular expression by default; pass ``literal=True`` to search for
+        the exact string (regex metacharacters such as ``[``, ``]``, and ``.``
+        are automatically escaped).
     ignore_case:
         When ``True`` (the default) the pattern is matched case-insensitively.
     occurrence:
@@ -72,6 +80,10 @@ def get_request_trace(
         ``1`` selects the first (oldest) occurrence, ``2`` the second, and so
         on.  Negative indices count from the end: ``-1`` (the default) selects
         the last (most recent) occurrence.
+    literal:
+        When ``True`` the pattern is treated as a plain fixed string rather
+        than a regular expression.  This is the safe choice when pasting a
+        real log line as the search term.
 
     Returns
     -------
@@ -81,7 +93,8 @@ def get_request_trace(
         when no line in the file matches *pattern*.
     """
     flags = re.IGNORECASE if ignore_case else 0
-    error_re = re.compile(pattern, flags)
+    search_pattern = re.escape(pattern) if literal else pattern
+    error_re = re.compile(search_pattern, flags)
 
     # Each entry in *all_traces* is the complete line buffer for one match.
     all_traces: list[list[str]] = []
@@ -116,7 +129,7 @@ def get_request_trace(
                         buffer_by_pid[current_pid] = []
                     buffer_by_pid[current_pid].append(line)
 
-                    if error_re.search(message):
+                    if error_re.search(line):
                         # Snapshot the buffer; keep it alive in case further
                         # lines continue (e.g. a second error from same PID).
                         all_traces.append(list(buffer_by_pid[current_pid]))
@@ -171,6 +184,16 @@ def main() -> None:
         help="Regex pattern identifying the error line of interest (default: '500 Internal Server Error')",
     )
     parser.add_argument(
+        "--literal",
+        action="store_true",
+        help=(
+            "Treat --pattern as a plain fixed string rather than a regular "
+            "expression. Use this when the search string contains special "
+            "characters such as brackets, dots, or parentheses "
+            "(e.g. when pasting a raw log line as the search term)."
+        ),
+    )
+    parser.add_argument(
         "--case-sensitive",
         action="store_true",
         help="Use case-sensitive matching for --pattern",
@@ -192,6 +215,7 @@ def main() -> None:
         args.pattern,
         ignore_case=not args.case_sensitive,
         occurrence=args.occurrence,
+        literal=args.literal,
     )
     print_trace(trace)
 

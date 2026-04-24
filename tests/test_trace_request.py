@@ -228,3 +228,69 @@ def test_print_trace_outputs_all_lines(capsys):
     captured = capsys.readouterr()
     for line in lines:
         assert line in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Tests for --literal / full-line matching
+# ---------------------------------------------------------------------------
+
+SAMPLE_WITH_USER = """\
+2026-04-21 20:07:21,987 [PID 155449] [INFO] webapp -> **** INCOMING REQUEST: /eml/check [POST]
+2026-04-21 20:07:21,990 [PID 155449] [INFO] webapp -> step A
+2026-04-21 20:07:21,987 [PID 155449] [ERROR] [USER: Colin Smith] webapp -> 500 Internal Server Error
+""".encode()
+
+
+def test_literal_pattern_matches_full_log_line():
+    """literal=True matches a pasted log line containing regex metacharacters."""
+    # The pattern is an exact prefix of the error line.  Without literal=True
+    # the brackets would be interpreted as a regex character class and would
+    # fail to match the literal text.
+    search_string = "2026-04-21 20:07:21,987 [PID 155449] [ERROR] [USER: Colin Smith]"
+    path = _write_tmp(SAMPLE_WITH_USER)
+    try:
+        trace = get_request_trace(path, search_string, literal=True)
+    finally:
+        os.unlink(path)
+
+    assert trace, "Expected a non-empty trace for the literal pattern"
+    assert any("INCOMING REQUEST" in line for line in trace)
+    assert any("500 Internal Server Error" in line for line in trace)
+
+
+def test_literal_pattern_no_escape_fails_with_special_chars():
+    """Without literal=True a regex-invalid string raises an error; literal=True handles it safely."""
+    # An unclosed bracket is invalid regex syntax and raises re.error without
+    # escaping, but is treated as a plain substring search when literal=True.
+    invalid_regex = "[USER: Colin Smith"
+    path = _write_tmp(SAMPLE_WITH_USER)
+    try:
+        # literal=False → expect re.error (invalid regex)
+        import re
+        raised = False
+        try:
+            get_request_trace(path, invalid_regex, literal=False)
+        except re.error:
+            raised = True
+        assert raised, "Invalid regex should raise re.error when literal=False"
+
+        # literal=True → no exception; the substring IS found (it's a prefix of
+        # "[USER: Colin Smith]") so we should get a non-empty trace.
+        trace = get_request_trace(path, invalid_regex, literal=True)
+        assert trace, "literal=True should find the line as a plain substring"
+        assert any("INCOMING REQUEST" in line for line in trace)
+    finally:
+        os.unlink(path)
+
+
+def test_full_line_pattern_matches_header_fields():
+    """Pattern is matched against the full raw line, not just the message portion."""
+    # Use a pattern that only appears in the header (PID + level), not in the message.
+    path = _write_tmp(SAMPLE_WITH_USER)
+    try:
+        trace = get_request_trace(path, r"PID 155449.*ERROR", ignore_case=False)
+    finally:
+        os.unlink(path)
+
+    assert trace, "Pattern matching PID+level in the header should return a trace"
+    assert any("500 Internal Server Error" in line for line in trace)
