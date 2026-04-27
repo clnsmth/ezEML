@@ -954,6 +954,10 @@ def set_check_data_tables_badge_status(document_name, eml_node):
 def collect_missing_data_files(document_name, eml_node):
     """Return (missing_data_tables, missing_other_entities) as two lists of filenames.
 
+    Args:
+        document_name (str): The name of the active document (used to locate the uploads folder).
+        eml_node (Node): The root metapype node of the EML document.
+
     Skips data tables whose distribution URL points to EDI/PASTA since those files
     are not expected to be stored locally.
     Does NOT apply the GC cutoff check — that is the caller's responsibility.
