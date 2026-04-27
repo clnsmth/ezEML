@@ -55,6 +55,7 @@ from webapp.home.exceptions import (
     AuthTokenExpired,
     DataTableError,
     DeprecatedCodeError,
+    MissingDataFiles,
     MissingFileError,
     Unauthorized,
     UnicodeDecodeErrorInternal
@@ -595,6 +596,16 @@ def data_table_errors(data_table_name:str=None):
     csv_filename = check_data_table_contents.get_data_table_filename(data_table_node)
     csv_filepath = check_data_table_contents.get_csv_filepath(current_document, csv_filename)
     data_table_size = check_data_table_contents.get_data_table_size(data_table_node)
+
+    if not check_data_table_contents.csv_file_exists(current_document, csv_filename):
+        missing_data_tables, missing_other_entities = \
+            check_data_table_contents.collect_missing_data_files(current_document, eml_node)
+        raise MissingDataFiles(
+            f'Data file not found: {csv_filename}',
+            document_name=current_document,
+            missing_data_tables=missing_data_tables,
+            missing_other_entities=missing_other_entities,
+        )
 
     metadata_hash = check_data_table_contents.hash_data_table_metadata_settings(eml_node, data_table_name)
 

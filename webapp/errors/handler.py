@@ -8,7 +8,7 @@ from flask_login import current_user
 from flask_wtf.csrf import CSRFError
 from webapp import app
 from webapp.home.exceptions import EMLFileNotFound, LockOwnedByAGroup, LockOwnedByAnotherUser, DeprecatedCodeError, \
-    NodeWithGivenIdNotFound, InvalidFilename
+    NodeWithGivenIdNotFound, InvalidFilename, MissingDataFiles
 from webapp.config import Config
 import webapp.auth.user_data as user_data
 from webapp.pages import *
@@ -103,3 +103,20 @@ def handle_csrf_error(error):
 def handle_deprecated_code_error(error):
     log_error('**** A deprecated code error occurred: {0}'.format(error.message))
     return render_template('deprecated_code_error.html', message=error.message), 403
+
+
+@app.errorhandler(MissingDataFiles)
+def handle_missing_data_files(error):
+    log_error(
+        'Missing data files for document "{0}": data tables={1}, other entities={2}'.format(
+            error.document_name,
+            error.missing_data_tables,
+            error.missing_other_entities,
+        )
+    )
+    return render_template(
+        'missing_data_files_error.html',
+        document_name=error.document_name,
+        missing_data_tables=error.missing_data_tables,
+        missing_other_entities=error.missing_other_entities,
+    ), 422
