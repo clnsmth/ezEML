@@ -27,39 +27,39 @@ Command-line usage
 ------------------
 Summarize all 500 errors in a log file::
 
-    python ezeml_log_tools.py summarize webapp/ezeml-log.txt
+    python ezeml_log_tools.py summarize webapp/metadata-eml.log
 
 Summarize with a custom pattern and show the last 20 errors::
 
-    python ezeml_log_tools.py summarize webapp/ezeml-log.txt \\
+    python ezeml_log_tools.py summarize webapp/metadata-eml.log \\
         --error-pattern "500 Internal Server Error" \\
         --show-recent 20
 
 Summarize a custom pattern using a literal (non-regex) search string::
 
-    python ezeml_log_tools.py summarize webapp/ezeml-log.txt \\
+    python ezeml_log_tools.py summarize webapp/metadata-eml.log \\
         --error-pattern "404 Not Found" \\
         --literal
 
 Show the request trace for the most recent 500 error::
 
-    python ezeml_log_tools.py trace webapp/ezeml-log.txt
+    python ezeml_log_tools.py trace webapp/metadata-eml.log
 
 Trace a specific error line using a literal (non-regex) search string::
 
-    python ezeml_log_tools.py trace webapp/ezeml-log.txt \\
+    python ezeml_log_tools.py trace webapp/metadata-eml.log \\
         --pattern "2026-04-21 20:07:21,987 [PID 155449] [ERROR] [USER: Colin Smith]" \\
         --literal
 
 Trace the first (oldest) occurrence::
 
-    python ezeml_log_tools.py trace webapp/ezeml-log.txt \\
+    python ezeml_log_tools.py trace webapp/metadata-eml.log \\
         --pattern "500 Internal Server Error" \\
         --occurrence 1
 
 Interactively select and trace a matching error::
 
-    python ezeml_log_tools.py interactive webapp/ezeml-log.txt "500 Internal Server Error"
+    python ezeml_log_tools.py interactive webapp/metadata-eml.log "500 Internal Server Error"
 
 Programmatic usage
 ------------------
@@ -67,21 +67,21 @@ Parse and summarize errors::
 
     from ezeml_log_tools import parse_log, summarize
 
-    events = parse_log("webapp/ezeml-log.txt", r"500 Internal Server Error", ignore_case=True)
+    events = parse_log("webapp/metadata-eml.log", r"500 Internal Server Error", ignore_case=True)
     summarize(events, top_n=10, show_recent=10, show_traceback_lines=0)
 
 Retrieve a request trace::
 
     from ezeml_log_tools import get_request_trace, print_trace
 
-    lines = get_request_trace("webapp/ezeml-log.txt", "500 Internal Server Error")
+    lines = get_request_trace("webapp/metadata-eml.log", "500 Internal Server Error")
     print_trace(lines)
 
 Interactive summary-then-trace workflow::
 
     from ezeml_log_tools import interactive_trace
 
-    interactive_trace("webapp/ezeml-log.txt", "500 Internal Server Error")
+    interactive_trace("webapp/metadata-eml.log", "500 Internal Server Error")
 """
 
 import argparse
@@ -315,7 +315,7 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool, literal: bool = 
     --------
     ::
 
-        events = parse_log("webapp/ezeml-log.txt",
+        events = parse_log("webapp/metadata-eml.log",
                            r"500 Internal Server Error",
                            ignore_case=True)
         for event in events:
@@ -479,7 +479,7 @@ def summarize(
     --------
     ::
 
-        events = parse_log("webapp/ezeml-log.txt",
+        events = parse_log("webapp/metadata-eml.log",
                            r"500 Internal Server Error",
                            ignore_case=True)
         summarize(events, top_n=10, show_recent=10, show_traceback_lines=5)
@@ -591,7 +591,7 @@ def get_request_trace(
     --------
     Most-recent 500 error trace::
 
-        lines = get_request_trace("webapp/ezeml-log.txt",
+        lines = get_request_trace("webapp/metadata-eml.log",
                                   "500 Internal Server Error")
         for line in lines:
             print(line)
@@ -599,7 +599,7 @@ def get_request_trace(
     Trace using a literal log-line string (safe for brackets, dots, etc.)::
 
         lines = get_request_trace(
-            "webapp/ezeml-log.txt",
+            "webapp/metadata-eml.log",
             "2026-04-21 20:07:21,987 [PID 155449] [ERROR] [USER: Colin Smith]",
             literal=True,
         )
@@ -722,7 +722,7 @@ def interactive_trace(
     --------
     ::
 
-        interactive_trace("webapp/ezeml-log.txt", "500 Internal Server Error")
+        interactive_trace("webapp/metadata-eml.log", "500 Internal Server Error")
     """
     events = parse_log(path, search_string, ignore_case=ignore_case, literal=True)
     events = sorted(events, key=lambda e: e.timestamp)
@@ -788,9 +788,9 @@ def _build_summarize_parser(subparsers: argparse.Action) -> None:
             "Examples\n"
             "--------\n"
             "  # Summarize all 500 errors (default pattern)\n"
-            "  python ezeml_log_tools.py summarize webapp/ezeml-log.txt\n\n"
+            "  python ezeml_log_tools.py summarize webapp/metadata-eml.log\n\n"
             "  # Custom pattern, show 20 recent errors, include 5 traceback lines\n"
-            "  python ezeml_log_tools.py summarize webapp/ezeml-log.txt \\\n"
+            "  python ezeml_log_tools.py summarize webapp/metadata-eml.log \\\n"
             "      --error-pattern 'InternalServerError' \\\n"
             "      --show-recent 20 --traceback-lines 5\n"
         ),
@@ -798,8 +798,8 @@ def _build_summarize_parser(subparsers: argparse.Action) -> None:
     p.add_argument(
         "log_file",
         nargs="?",
-        default="webapp/ezeml-log.txt",
-        help="Path to log file (default: webapp/ezeml-log.txt)",
+        default="webapp/metadata-eml.log",
+        help="Path to log file (default: webapp/metadata-eml.log)",
     )
     p.add_argument(
         "--error-pattern",
@@ -875,21 +875,21 @@ def _build_trace_parser(subparsers: argparse.Action) -> None:
             "Examples\n"
             "--------\n"
             "  # Most-recent 500 error trace (default pattern)\n"
-            "  python ezeml_log_tools.py trace webapp/ezeml-log.txt\n\n"
+            "  python ezeml_log_tools.py trace webapp/metadata-eml.log\n\n"
             "  # Literal search — safe for strings with brackets, dots, etc.\n"
-            "  python ezeml_log_tools.py trace webapp/ezeml-log.txt \\\n"
+            "  python ezeml_log_tools.py trace webapp/metadata-eml.log \\\n"
             "      --pattern '2026-04-21 20:07:21,987 [PID 155449] [ERROR] [USER: Colin Smith]' \\\n"
             "      --literal\n\n"
             "  # Select the first (oldest) occurrence\n"
-            "  python ezeml_log_tools.py trace webapp/ezeml-log.txt \\\n"
+            "  python ezeml_log_tools.py trace webapp/metadata-eml.log \\\n"
             "      --pattern 'Some error text' --occurrence 1\n"
         ),
     )
     p.add_argument(
         "log_file",
         nargs="?",
-        default="webapp/ezeml-log.txt",
-        help="Path to log file (default: webapp/ezeml-log.txt)",
+        default="webapp/metadata-eml.log",
+        help="Path to log file (default: webapp/metadata-eml.log)",
     )
     p.add_argument(
         "--pattern",
@@ -937,18 +937,18 @@ def _build_interactive_parser(subparsers: argparse.Action) -> None:
             "Examples\n"
             "--------\n"
             "  # List the 10 most-recent 500 errors, then trace the selected one\n"
-            "  python ezeml_log_tools.py interactive webapp/ezeml-log.txt "
+            "  python ezeml_log_tools.py interactive webapp/metadata-eml.log "
             "'500 Internal Server Error'\n\n"
             "  # Show up to 20 recent errors for selection\n"
-            "  python ezeml_log_tools.py interactive webapp/ezeml-log.txt "
+            "  python ezeml_log_tools.py interactive webapp/metadata-eml.log "
             "'404 Not Found' --show-recent 20\n"
         ),
     )
     p.add_argument(
         "log_file",
         nargs="?",
-        default="webapp/ezeml-log.txt",
-        help="Path to log file (default: webapp/ezeml-log.txt)",
+        default="webapp/metadata-eml.log",
+        help="Path to log file (default: webapp/metadata-eml.log)",
     )
     p.add_argument(
         "search_string",
@@ -1004,9 +1004,9 @@ def main() -> None:
             "Run 'ezeml_log_tools <subcommand> --help' for per-command options.\n\n"
             "Quick examples\n"
             "--------------\n"
-            "  python ezeml_log_tools.py summarize webapp/ezeml-log.txt\n"
-            "  python ezeml_log_tools.py trace webapp/ezeml-log.txt --pattern 'My error'\n"
-            "  python ezeml_log_tools.py interactive webapp/ezeml-log.txt 'My error'\n"
+            "  python ezeml_log_tools.py summarize webapp/metadata-eml.log\n"
+            "  python ezeml_log_tools.py trace webapp/metadata-eml.log --pattern 'My error'\n"
+            "  python ezeml_log_tools.py interactive webapp/metadata-eml.log 'My error'\n"
         ),
     )
     subparsers = parser.add_subparsers(dest="command", metavar="<subcommand>")
