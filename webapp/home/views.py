@@ -1408,11 +1408,13 @@ def check_data_tables():
     log_usage(actions['CHECK_DATA_TABLES'])
     set_current_page('check_data_tables')
 
+    # Detect missing files once; used for both POST handling and button-state rendering.
+    missing_data_tables, missing_other_entities = \
+        check_data_table_contents.collect_missing_data_files(current_document, eml_node)
+
     # Process POST
     if request.method == 'POST':
         if BTN_CHECK_ALL_TABLES in request.form:
-            missing_data_tables, missing_other_entities = \
-                check_data_table_contents.collect_missing_data_files(current_document, eml_node)
             if missing_data_tables or missing_other_entities:
                 raise MissingDataFiles(
                     'Missing data files',
@@ -1424,6 +1426,9 @@ def check_data_tables():
 
     content, btn_disabled = check_data_table_contents.create_check_data_tables_status_page_content(
         current_document, eml_node)
+    # Enable the button whenever there are missing files to report, regardless of distribution URL.
+    if missing_data_tables or missing_other_entities:
+        btn_disabled = ''
     tooltip = 'Nothing to check' if btn_disabled else ''
 
     check_data_table_contents.set_check_data_tables_badge_status(current_document, eml_node)

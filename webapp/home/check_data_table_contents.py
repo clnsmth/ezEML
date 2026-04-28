@@ -1040,7 +1040,23 @@ def flash_missing_data_files(document_name, eml_node):
     if not should_flash_missing_data_files(document_name):
         return 0
 
-    missing_data_tables, missing_other_entities = collect_missing_data_files(document_name, eml_node)
+    # --- data tables ---
+    missing_data_tables = []
+    data_table_nodes = []
+    eml_node.find_all_descendants(names.DATATABLE, data_table_nodes)
+    for data_table_node in data_table_nodes:
+        object_name = get_data_table_filename(data_table_node)
+        if not object_name:
+            continue
+        if not csv_file_exists(document_name, object_name):
+            # Skip tables hosted on EDI – they are not expected locally.
+            online_distribution_url_node = data_table_node.find_single_node_by_path(
+                [names.PHYSICAL, names.DISTRIBUTION, names.ONLINE, names.URL])
+            if online_distribution_url_node and \
+                    online_distribution_url_node.content and \
+                    Config.PASTA_URL in online_distribution_url_node.content:
+                continue
+            missing_data_tables.append(object_name)
 
     if missing_data_tables:
         file_list = ', '.join(f'"{n}"' for n in missing_data_tables)
@@ -1051,6 +1067,18 @@ def flash_missing_data_files(document_name, eml_node):
             'You can re-upload them from the Data Tables page.',
             'warning'
         )
+
+    # --- other entities ---
+    missing_other_entities = []
+    other_entity_nodes = []
+    eml_node.find_all_descendants(names.OTHERENTITY, other_entity_nodes)
+    for other_entity_node in other_entity_nodes:
+        object_name_node = other_entity_node.find_single_node_by_path([names.PHYSICAL, names.OBJECTNAME])
+        if not object_name_node or not object_name_node.content:
+            continue
+        object_name = object_name_node.content
+        if not csv_file_exists(document_name, object_name):
+            missing_other_entities.append(object_name)
 
     if missing_other_entities:
         file_list = ', '.join(f'"{n}"' for n in missing_other_entities)
@@ -1283,7 +1311,6 @@ def create_check_data_tables_status_page_content(document_name, eml_node):
                         onclick = f'onclick="return confirm(\'Data table size = {mb} MB. Continue?\') && stand_by_2;"'
                 action = f'<a href="data_table_fetch/{quoted_document_name}/{quoted_csv_name}/{quoted_url}"{onclick}>Fetch data table</a>'
             else:
-                btn_status = ''
                 action = 'CSV file missing. Upload via the Data Tables page.'
         output += f'<tr><td width=2%><span class ="nav_link {status}_circle"></span></td>'
         output += f'<td width=68%>{data_table_name}</td>'
