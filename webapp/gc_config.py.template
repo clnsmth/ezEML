@@ -1,0 +1,4 @@
+class GCConfig(object):
+
+    ACCOUNTS_EXEMPT_FROM_CSV_GC = [
+    ]

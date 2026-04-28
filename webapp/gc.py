@@ -11,6 +11,7 @@ import click
 import daiquiri
 
 from config import Config
+from gc_config import GCConfig
 
 
 def short_name(filename):
@@ -221,8 +222,15 @@ def GC(days, base, keep_uploads, include_exports, exports_days, logonly):
 					# have a JSON file modified longer ago than days
 					package_name = os.path.splitext(file)[0]
 
+					# see if this account is exempt from uploads being garbage-collected
+					exempt = False
+					for account in GCConfig.ACCOUNTS_EXEMPT_FROM_CSV_GC:
+						if account in user_dir:
+							exempt = True
+							break
+
 					# remove the uploads dir for this package
-					if not keep_uploads:
+					if not keep_uploads and not exempt:
 						remove_uploads_dir_for_package(package_name, base, user_dir, logger, logonly, age=filetime.days)
 
 					# remove the backups for this JSON file
