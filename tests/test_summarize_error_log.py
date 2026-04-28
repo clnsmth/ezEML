@@ -184,3 +184,30 @@ def test_summarize_no_route_in_output():
     output = _capture_summarize(events)
     assert "Top routes" not in output
     assert "Route    :" not in output
+
+
+SAMPLE_LOG_TWO_ERRORS = """\
+2026-04-17 06:43:03,560 [PID 1] [ERROR] webapp -> first error 500 Internal Server Error
+2026-04-17 06:43:04,000 [PID 2] [ERROR] webapp -> second error 500 Internal Server Error
+""".encode()
+
+
+def test_summarize_most_recent_errors_ordered_newest_first():
+    """summarize() lists the most-recent error before older ones."""
+    path = _write_tmp(SAMPLE_LOG_TWO_ERRORS)
+    try:
+        events = parse_log(path, r"500 Internal Server Error", ignore_case=False)
+    finally:
+        os.unlink(path)
+
+    output = _capture_summarize(events)
+    # Restrict search to the "Most recent …" detail section only, so that
+    # matches in the "Top exceptions" table (which appears earlier) don't
+    # influence the position comparison.
+    recent_section = output[output.find("Most recent"):]
+    first_pos = recent_section.find("first error")
+    second_pos = recent_section.find("second error")
+    # Most-recent ("second error") must appear before the older one.
+    assert second_pos < first_pos, (
+        "Expected the most-recent error to be printed first"
+    )
