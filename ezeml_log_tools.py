@@ -18,6 +18,11 @@ traceback continuation lines).  The result is a self-contained, chronological
 snippet that shows the exact sequence of steps the server executed before the
 error occurred.
 
+**Interactive** — combines *summarize* and *trace* into a single interactive
+workflow.  The tool lists recent matching errors with numbered references,
+waits for the user to choose one, then prints the full request trace for the
+chosen error.
+
 Command-line usage
 ------------------
 Summarize all 500 errors in a log file::
@@ -52,6 +57,10 @@ Trace the first (oldest) occurrence::
         --pattern "500 Internal Server Error" \\
         --occurrence 1
 
+Interactively select and trace a matching error::
+
+    python ezeml_log_tools.py interactive webapp/ezeml-log.txt "500 Internal Server Error"
+
 Programmatic usage
 ------------------
 Parse and summarize errors::
@@ -67,6 +76,12 @@ Retrieve a request trace::
 
     lines = get_request_trace("webapp/ezeml-log.txt", "500 Internal Server Error")
     print_trace(lines)
+
+Interactive summary-then-trace workflow::
+
+    from ezeml_log_tools import interactive_trace
+
+    interactive_trace("webapp/ezeml-log.txt", "500 Internal Server Error")
 """
 
 import argparse
@@ -671,6 +686,90 @@ def print_trace(trace: list[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Interactive workflow
+# ---------------------------------------------------------------------------
+
+def interactive_trace(
+    path: str,
+    search_string: str,
+    show_recent: int = 10,
+    max_errors: int = 500,
+    ignore_case: bool = True,
+) -> None:
+    """Interactive summary-then-trace workflow.
+
+    Presents a numbered list of the most-recent matching errors, prompts the
+    user to select one by its reference number, then prints the full request
+    trace for the chosen error.
+
+    Parameters
+    ----------
+    path:
+        Path to the ezEML log file.
+    search_string:
+        Plain fixed string to search for in the log (not a regular
+        expression).  All occurrences are listed and the user selects
+        one to trace.
+    show_recent:
+        Number of recent errors to list for selection.  Defaults to 10.
+    max_errors:
+        Cap on how many recent matching errors are analysed before listing.
+        Defaults to 500.
+    ignore_case:
+        When ``True`` (the default) the search is case-insensitive.
+
+    Examples
+    --------
+    ::
+
+        interactive_trace("webapp/ezeml-log.txt", "500 Internal Server Error")
+    """
+    events = parse_log(path, search_string, ignore_case=ignore_case, literal=True)
+    events = sorted(events, key=lambda e: e.timestamp)
+    if max_errors > 0:
+        events = events[-max_errors:]
+
+    if not events:
+        print("No matching errors were found.")
+        return
+
+    recent = list(reversed(events[-show_recent:]))
+    print(f"Most recent {len(recent)} matching errors:")
+    for idx, event in enumerate(recent, start=1):
+        ts_display = (
+            event.timestamp.strftime("%Y-%m-%d %H:%M:%S,")
+            + str(event.timestamp.microsecond // 1000).zfill(3)
+        )
+        print(f"\n  [{idx}] {ts_display} | PID {event.pid} | user={event.user}")
+        if event.preceding_line is not None:
+            print(f"       Prev     : {event.preceding_line}")
+        print(f"       Function : {event.function}")
+        print(f"       Exception: {event.exception}")
+        print(f"       Status   : {event.status_message}")
+
+    print()
+    while True:
+        raw = input(f"Enter the number of the error to trace [1-{len(recent)}]: ").strip()
+        try:
+            choice = int(raw)
+            if 1 <= choice <= len(recent):
+                break
+            print(f"  Please enter a number between 1 and {len(recent)}.")
+        except ValueError:
+            print("  Invalid input. Please enter an integer.")
+
+    selected = recent[choice - 1]
+    ts_str = (
+        selected.timestamp.strftime("%Y-%m-%d %H:%M:%S,")
+        + str(selected.timestamp.microsecond // 1000).zfill(3)
+    )
+    trace_pattern = f"{ts_str} [PID {selected.pid}]"
+    trace = get_request_trace(path, trace_pattern, ignore_case=False, literal=True)
+    print()
+    print_trace(trace)
+
+
+# ---------------------------------------------------------------------------
 # Command-line interface
 # ---------------------------------------------------------------------------
 
@@ -823,15 +922,76 @@ def _build_trace_parser(subparsers: argparse.Action) -> None:
     )
 
 
+def _build_interactive_parser(subparsers: argparse.Action) -> None:
+    """Register the ``interactive`` sub-command on *subparsers*."""
+    p = subparsers.add_parser(
+        "interactive",
+        help="Interactively select a matching error and display its request trace.",
+        description=(
+            "List the most-recent matching errors with numbered references, "
+            "prompt for a selection, then print the full request trace for the "
+            "chosen error."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples\n"
+            "--------\n"
+            "  # List the 10 most-recent 500 errors, then trace the selected one\n"
+            "  python ezeml_log_tools.py interactive webapp/ezeml-log.txt "
+            "'500 Internal Server Error'\n\n"
+            "  # Show up to 20 recent errors for selection\n"
+            "  python ezeml_log_tools.py interactive webapp/ezeml-log.txt "
+            "'404 Not Found' --show-recent 20\n"
+        ),
+    )
+    p.add_argument(
+        "log_file",
+        nargs="?",
+        default="webapp/ezeml-log.txt",
+        help="Path to log file (default: webapp/ezeml-log.txt)",
+    )
+    p.add_argument(
+        "search_string",
+        help="Literal string to search for in the log (not a regular expression).",
+    )
+    p.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Use case-sensitive matching for the search string",
+    )
+
+    def positive_int(value: str) -> int:
+        integer = int(value)
+        if integer < 1:
+            raise argparse.ArgumentTypeError("Value must be >= 1.")
+        return integer
+
+    p.add_argument(
+        "--show-recent",
+        type=positive_int,
+        default=10,
+        help="Number of recent errors to list for selection (default: 10)",
+    )
+    p.add_argument(
+        "--max-errors",
+        type=positive_int,
+        default=500,
+        help="Analyse at most the most-recent N matching errors (default: 500)",
+    )
+
+
 def main() -> None:
     """Entry point for the ``ezeml_log_tools`` command-line interface.
 
-    Exposes two sub-commands:
+    Exposes three sub-commands:
 
     ``summarize``
         Aggregate error statistics across the whole log file.
     ``trace``
         Deep-dive into the request sequence leading up to one specific error.
+    ``interactive``
+        List recent matching errors with numbered references, prompt for a
+        selection, then print the request trace for the chosen error.
 
     Run ``python ezeml_log_tools.py --help`` or
     ``python ezeml_log_tools.py <subcommand> --help`` for full option details.
@@ -846,6 +1006,7 @@ def main() -> None:
             "--------------\n"
             "  python ezeml_log_tools.py summarize webapp/ezeml-log.txt\n"
             "  python ezeml_log_tools.py trace webapp/ezeml-log.txt --pattern 'My error'\n"
+            "  python ezeml_log_tools.py interactive webapp/ezeml-log.txt 'My error'\n"
         ),
     )
     subparsers = parser.add_subparsers(dest="command", metavar="<subcommand>")
@@ -853,6 +1014,7 @@ def main() -> None:
 
     _build_summarize_parser(subparsers)
     _build_trace_parser(subparsers)
+    _build_interactive_parser(subparsers)
 
     args = parser.parse_args()
 
@@ -882,6 +1044,15 @@ def main() -> None:
             literal=args.literal,
         )
         print_trace(trace)
+
+    elif args.command == "interactive":
+        interactive_trace(
+            args.log_file,
+            args.search_string,
+            show_recent=args.show_recent,
+            max_errors=args.max_errors,
+            ignore_case=not args.case_sensitive,
+        )
 
 
 if __name__ == "__main__":
