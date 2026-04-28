@@ -1037,9 +1037,6 @@ def flash_missing_data_files(document_name, eml_node):
 
     Returns the total number of missing files found.
     """
-    if not should_flash_missing_data_files(document_name):
-        return 0
-
     # --- data tables ---
     missing_data_tables = []
     data_table_nodes = []
