@@ -488,7 +488,7 @@ def summarize(
     print_top("Counts by day", by_day, top_n)
 
     print(f"\nMost recent {min(show_recent, len(events))} matching errors:")
-    for event in events[-show_recent:]:
+    for event in reversed(events[-show_recent:]):
         print(f"\n- {event.timestamp} | PID {event.pid} | user={event.user}")
         if event.preceding_line is not None:
             print(f"  Prev     : {event.preceding_line}")
