@@ -2,6 +2,10 @@
 Handlers for the various errors that can occur in the webapp. Logs the error and returns a template.
 """
 
+from datetime import datetime
+from pathlib import Path
+import shutil
+
 import daiquiri
 from flask import Blueprint, redirect, render_template, request, url_for
 from flask_login import current_user
@@ -49,8 +53,37 @@ def bad_request(error):
     return render_template('404.html'), 404
 
 
+def backup_model_file():
+    try:
+        user_path = Path(user_data.get_user_folder_name())
+
+        backup_path = Path(user_data.get_user_error_backups_folder_name())
+        backup_path.mkdir(parents=True, exist_ok=True)
+
+        active_document = user_data.get_active_document()
+        if not active_document:
+            return
+
+        active_document = f'{active_document}.json'
+        src = user_path / active_document
+
+        if not src.exists():
+            log_error(f'backup_model_file: Source file does not exist: {src}')
+            return
+
+        timestamp = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+        backup_filename = f'{timestamp} {active_document}'
+        dst = backup_path / backup_filename
+
+        shutil.copy2(src, dst)
+        log_error(f'Model file backed up as error_backups/{backup_filename}')
+    except Exception as e:
+        log_error(f'Unable to backup json file {active_document if "active_document" in locals() else "unknown"}: {e}')
+
+
 @app.errorhandler(500)
 def bad_request(error):
+    backup_model_file()
     log_error(error)
     return render_template('500.html'), 500
 
@@ -72,6 +105,7 @@ def handle_invalid_filename(error):
 
 @app.errorhandler(NodeWithGivenIdNotFound)
 def handle_node_with_given_id_not_found(error):
+    backup_model_file()
     log_error('Node with given ID not found: {0}'.format(error.message))
     return render_template('node_with_given_id_not_found.html'), 404
 
