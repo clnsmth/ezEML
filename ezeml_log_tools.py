@@ -713,7 +713,7 @@ def interactive_trace(
     show_recent:
         Number of recent errors to list for selection.  Defaults to 10.
     max_errors:
-        Cap on how many recent matching errors are analysed before listing.
+        Cap on how many recent matching errors are analyzed before listing.
         Defaults to 500.
     ignore_case:
         When ``True`` (the default) the search is case-insensitive.
@@ -976,7 +976,7 @@ def _build_interactive_parser(subparsers: argparse.Action) -> None:
         "--max-errors",
         type=positive_int,
         default=500,
-        help="Analyse at most the most-recent N matching errors (default: 500)",
+        help="Analyze at most the most-recent N matching errors (default: 500)",
     )
 
 
