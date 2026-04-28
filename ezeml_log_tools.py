@@ -30,6 +30,12 @@ Summarize with a custom pattern and show the last 20 errors::
         --error-pattern "500 Internal Server Error" \\
         --show-recent 20
 
+Summarize a custom pattern using a literal (non-regex) search string::
+
+    python ezeml_log_tools.py summarize webapp/ezeml-log.txt \\
+        --error-pattern "404 Not Found" \\
+        --literal
+
 Show the request trace for the most recent 500 error::
 
     python ezeml_log_tools.py trace webapp/ezeml-log.txt
@@ -364,7 +370,10 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool, literal: bool = 
                         timestamp=current_ts, route=route
                     )
 
-                if error_re.search(message):
+                # For literal matching, match against the full line (like trace does).
+                # For regex, match against the message portion (as before).
+                match_target = line if literal else message
+                if error_re.search(match_target):
                     route = "unknown"
                     req_ctx = last_request_by_pid.get(current_pid)
                     if req_ctx and current_ts - req_ctx.timestamp <= MAX_CORRELATION_WINDOW:
