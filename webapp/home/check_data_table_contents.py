@@ -34,7 +34,6 @@ import os
 
 from collections import OrderedDict
 import csv
-from datetime import datetime, timedelta
 from flask import session, flash, request, redirect, url_for
 import glob
 import hashlib
@@ -54,7 +53,7 @@ import webapp.home.metapype_client
 from webapp.home.home_utils import log_error, log_info, log_available_memory
 import webapp.home.utils.load_and_save
 from webapp.home.utils.security import validate_download_url
-from webapp.pages import PAGE_CHECK_DATA_TABLES, PAGE_DATA_TABLE_SELECT, PAGE_OTHER_ENTITY_SELECT
+from webapp.pages import PAGE_CHECK_DATA_TABLES
 from webapp.utils import path_exists, path_isdir, path_join
 
 import webapp.auth.user_data as user_data
@@ -72,7 +71,6 @@ from metapype.model.node import Node
 date_time_format_examples = {}
 date_time_format_regex = {}
 DATE_TIME_FORMAT_REGEX_FILENAME = 'webapp/static/dateTimeFormatString_regex.csv'
-GC_DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 
 def load_eml_file(eml_file_url:str):
@@ -960,7 +958,6 @@ def collect_missing_data_files(document_name, eml_node):
 
     Skips data tables whose distribution URL points to EDI/PASTA since those files
     are not expected to be stored locally.
-    Does NOT apply the GC cutoff check — that is the caller's responsibility.
     """
     missing_data_tables = []
     data_table_nodes = []
@@ -991,38 +988,6 @@ def collect_missing_data_files(document_name, eml_node):
     return missing_data_tables, missing_other_entities
 
 
-def should_flash_missing_data_files(document_name):
-    """Return True if missing-file warnings should be shown for this package.
-
-    Uses GC_date.pkl as the preferred cutoff timestamp in GC_DATETIME_FORMAT.
-    If no valid cutoff can be loaded, defaults to Config.GC_DAYS_TO_LIVE earlier
-    than current time. If the package JSON mtime can't be read, warnings remain
-    enabled.
-    """
-    gc_cutoff_datetime = None
-    gc_date_file_path = path_join(Config.USER_DATA_DIR, 'GC_date.pkl')
-    if path_exists(gc_date_file_path):
-        try:
-            with open(gc_date_file_path, 'r', encoding='utf-8') as f:
-                gc_cutoff_value = f.read().strip()
-            if gc_cutoff_value:
-                gc_cutoff_datetime = datetime.strptime(gc_cutoff_value, GC_DATETIME_FORMAT)
-        except OSError:
-            gc_cutoff_datetime = None
-        except ValueError:
-            gc_cutoff_datetime = None
-
-    if gc_cutoff_datetime is None:
-        gc_cutoff_datetime = datetime.now() - timedelta(days=Config.GC_DAYS_TO_LIVE)
-
-    package_json_path = path_join(user_data.get_user_folder_name(), f'{document_name}.json')
-    try:
-        package_datetime = datetime.fromtimestamp(os.path.getmtime(package_json_path))
-    except (FileNotFoundError, OSError):
-        return True
-    return package_datetime <= gc_cutoff_datetime
-
-
 def flash_missing_data_files(document_name, eml_node):
     """Flash a combined warning for any data files (data tables or other entities) absent from the uploads folder.
 
@@ -1037,23 +1002,7 @@ def flash_missing_data_files(document_name, eml_node):
 
     Returns the total number of missing files found.
     """
-    # --- data tables ---
-    missing_data_tables = []
-    data_table_nodes = []
-    eml_node.find_all_descendants(names.DATATABLE, data_table_nodes)
-    for data_table_node in data_table_nodes:
-        object_name = get_data_table_filename(data_table_node)
-        if not object_name:
-            continue
-        if not csv_file_exists(document_name, object_name):
-            # Skip tables hosted on EDI – they are not expected locally.
-            online_distribution_url_node = data_table_node.find_single_node_by_path(
-                [names.PHYSICAL, names.DISTRIBUTION, names.ONLINE, names.URL])
-            if online_distribution_url_node and \
-                    online_distribution_url_node.content and \
-                    Config.PASTA_URL in online_distribution_url_node.content:
-                continue
-            missing_data_tables.append(object_name)
+    missing_data_tables, missing_other_entities = collect_missing_data_files(document_name, eml_node)
 
     if missing_data_tables:
         file_list = ', '.join(f'"{n}"' for n in missing_data_tables)
@@ -1064,18 +1013,6 @@ def flash_missing_data_files(document_name, eml_node):
             'You can re-upload them from the Data Tables page.',
             'warning'
         )
-
-    # --- other entities ---
-    missing_other_entities = []
-    other_entity_nodes = []
-    eml_node.find_all_descendants(names.OTHERENTITY, other_entity_nodes)
-    for other_entity_node in other_entity_nodes:
-        object_name_node = other_entity_node.find_single_node_by_path([names.PHYSICAL, names.OBJECTNAME])
-        if not object_name_node or not object_name_node.content:
-            continue
-        object_name = object_name_node.content
-        if not csv_file_exists(document_name, object_name):
-            missing_other_entities.append(object_name)
 
     if missing_other_entities:
         file_list = ', '.join(f'"{n}"' for n in missing_other_entities)
