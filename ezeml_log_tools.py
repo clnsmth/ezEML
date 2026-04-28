@@ -774,6 +774,8 @@ def _format_log_timestamp(ts: datetime) -> str:
     Returns a string like ``2026-04-21 20:07:21,987``, matching the format
     used in ezEML log-line headers.
     """
+    # %f produces 6-digit zero-padded microseconds; drop the last 3 digits
+    # to obtain millisecond precision (e.g. "001500" → "001").
     return ts.strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
 
 
