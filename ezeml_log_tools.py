@@ -266,7 +266,7 @@ def print_top(title: str, counts: Counter, top_n: int,
 # Core summarize API
 # ---------------------------------------------------------------------------
 
-def parse_log(path: str, error_pattern: str, ignore_case: bool) -> list[ErrorEvent]:
+def parse_log(path: str, error_pattern: str, ignore_case: bool, literal: bool = False) -> list[ErrorEvent]:
     """Scan a log file and return all lines matching *error_pattern*.
 
     For each matched line the function assembles an :class:`ErrorEvent` that
@@ -301,7 +301,8 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool) -> list[ErrorEve
             print(event.timestamp, event.function)
     """
     flags = re.IGNORECASE if ignore_case else 0
-    error_re = re.compile(error_pattern, flags)
+    search_pattern = re.escape(error_pattern) if literal else error_pattern
+    error_re = re.compile(search_pattern, flags)
 
     events: list[ErrorEvent] = []
     last_request_by_pid: dict[str, RequestContext] = {}
@@ -698,6 +699,15 @@ def _build_summarize_parser(subparsers: argparse.Action) -> None:
         help="Regex pattern to match error messages (default: '500 Internal Server Error')",
     )
     p.add_argument(
+        "--literal",
+        action="store_true",
+        help=(
+            "Treat --error-pattern as a plain fixed string rather than a regular expression. "
+            "Use this when the search string contains special characters such as "
+            "brackets, dots, or parentheses (e.g. when pasting a raw log line)."
+        ),
+    )
+    p.add_argument(
         "--case-sensitive",
         action="store_true",
         help="Use case-sensitive matching for --error-pattern",
@@ -838,7 +848,12 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "summarize":
-        events = parse_log(args.log_file, args.error_pattern, not args.case_sensitive)
+        events = parse_log(
+            args.log_file,
+            args.error_pattern,
+            not args.case_sensitive,
+            getattr(args, "literal", False),
+        )
         events = sorted(events, key=lambda e: e.timestamp)
         if args.max_errors > 0:
             events = events[-args.max_errors:]
