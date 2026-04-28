@@ -287,7 +287,7 @@ def print_top(title: str, counts: Counter, top_n: int,
 # Core summarize API
 # ---------------------------------------------------------------------------
 
-def parse_log(path: str, error_pattern: str, ignore_case: bool, literal: bool = False) -> list[ErrorEvent]:
+def parse_log(path: str, error_pattern: str, ignore_case: bool = True, literal: bool = False) -> list[ErrorEvent]:
     """Scan a log file and return all lines matching *error_pattern*.
 
     For each matched line the function assembles an :class:`ErrorEvent` that
@@ -304,7 +304,12 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool, literal: bool = 
         Regular-expression pattern applied to the message portion of each log
         line.  Matching lines become :class:`ErrorEvent` instances.
     ignore_case:
-        When ``True`` the pattern is compiled with :data:`re.IGNORECASE`.
+        When ``True`` (the default) the pattern is compiled with
+        :data:`re.IGNORECASE`.
+    literal:
+        When ``True`` the pattern is treated as a plain fixed string rather
+        than a regular expression.  Regex metacharacters are automatically
+        escaped.  Defaults to ``False``.
 
     Returns
     -------
@@ -354,9 +359,9 @@ def parse_log(path: str, error_pattern: str, ignore_case: bool, literal: bool = 
         traceback_context_ts = None
         traceback_context_pid = None
 
-    with open(path, "rb") as infile:
-        for raw_line in infile:
-            line = raw_line.decode("utf-8", errors="replace").rstrip("\n")
+    with open(path, encoding="utf-8", errors="replace") as infile:
+        for line in infile:
+            line = line.rstrip("\n")
             header_match = LOG_HEADER_RE.match(line)
 
             if header_match:
@@ -513,7 +518,7 @@ def summarize(
             in_prev_7d += 1
 
     print(f"Matched errors: {len(events)}")
-    print(f"Time range: {last_ts} to {first_ts}")
+    print(f"Time range: {first_ts} to {last_ts}")
     print(f"Last 24h: {in_last_24h} (previous 24h: {in_prev_24h})")
     print(f"Last 7d : {in_last_7d} (previous 7d : {in_prev_7d})")
 
@@ -618,9 +623,9 @@ def get_request_trace(
     buffer_by_pid: dict[str, list[str]] = {}
     current_pid: Optional[str] = None
 
-    with open(path, "rb") as fh:
-        for raw_line in fh:
-            line = raw_line.decode("utf-8", errors="replace").rstrip("\n")
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            line = line.rstrip("\n")
             header_match = LOG_HEADER_RE.match(line)
 
             if header_match:
@@ -638,9 +643,7 @@ def get_request_trace(
                     # Append to this PID's active buffer (create one if it
                     # doesn't exist yet — the request may have been before the
                     # beginning of the file).
-                    if current_pid not in buffer_by_pid:
-                        buffer_by_pid[current_pid] = []
-                    buffer_by_pid[current_pid].append(line)
+                    buffer_by_pid.setdefault(current_pid, []).append(line)
 
                     if error_re.search(line):
                         # Snapshot the buffer; keep it alive in case further
@@ -650,9 +653,7 @@ def get_request_trace(
                 # Continuation line (traceback frame, etc.) — append to the
                 # current PID's buffer so tracebacks are part of the trace.
                 if current_pid is not None:
-                    if current_pid not in buffer_by_pid:
-                        buffer_by_pid[current_pid] = []
-                    buffer_by_pid[current_pid].append(line)
+                    buffer_by_pid.setdefault(current_pid, []).append(line)
 
     if not all_traces:
         return []
@@ -736,10 +737,7 @@ def interactive_trace(
     recent = list(reversed(events[-show_recent:]))
     print(f"Most recent {len(recent)} matching errors:")
     for idx, event in enumerate(recent, start=1):
-        ts_display = (
-            event.timestamp.strftime("%Y-%m-%d %H:%M:%S,")
-            + str(event.timestamp.microsecond // 1000).zfill(3)
-        )
+        ts_display = _format_log_timestamp(event.timestamp)
         print(f"\n  [{idx}] {ts_display} | PID {event.pid} | user={event.user}")
         if event.preceding_line is not None:
             print(f"       Prev     : {event.preceding_line}")
@@ -759,10 +757,7 @@ def interactive_trace(
             print("  Invalid input. Please enter an integer.")
 
     selected = recent[choice - 1]
-    ts_str = (
-        selected.timestamp.strftime("%Y-%m-%d %H:%M:%S,")
-        + str(selected.timestamp.microsecond // 1000).zfill(3)
-    )
+    ts_str = _format_log_timestamp(selected.timestamp)
     trace_pattern = f"{ts_str} [PID {selected.pid}]"
     trace = get_request_trace(path, trace_pattern, ignore_case=False, literal=True)
     print()
@@ -772,6 +767,31 @@ def interactive_trace(
 # ---------------------------------------------------------------------------
 # Command-line interface
 # ---------------------------------------------------------------------------
+
+def _format_log_timestamp(ts: datetime) -> str:
+    """Format *ts* as an ezEML log timestamp string with millisecond precision.
+
+    Returns a string like ``2026-04-21 20:07:21,987``, matching the format
+    used in ezEML log-line headers.
+    """
+    return ts.strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+
+
+def _positive_int(value: str) -> int:
+    """Argparse type validator that requires a strictly positive integer."""
+    integer = int(value)
+    if integer < 1:
+        raise argparse.ArgumentTypeError("Value must be >= 1.")
+    return integer
+
+
+def _nonnegative_int(value: str) -> int:
+    """Argparse type validator that requires a non-negative integer."""
+    integer = int(value)
+    if integer < 0:
+        raise argparse.ArgumentTypeError("Value must be >= 0.")
+    return integer
+
 
 def _build_summarize_parser(subparsers: argparse.Action) -> None:
     """Register the ``summarize`` sub-command on *subparsers*."""
@@ -821,39 +841,27 @@ def _build_summarize_parser(subparsers: argparse.Action) -> None:
         help="Use case-sensitive matching for --error-pattern",
     )
 
-    def positive_int(value: str) -> int:
-        integer = int(value)
-        if integer < 1:
-            raise argparse.ArgumentTypeError("Value must be >= 1.")
-        return integer
-
-    def nonnegative_int(value: str) -> int:
-        integer = int(value)
-        if integer < 0:
-            raise argparse.ArgumentTypeError("Value must be >= 0.")
-        return integer
-
     p.add_argument(
         "--max-errors",
-        type=positive_int,
+        type=_positive_int,
         default=500,
         help="Analyze at most the most-recent N matching errors (default: 500)",
     )
     p.add_argument(
         "--top",
-        type=positive_int,
+        type=_positive_int,
         default=10,
         help="Show top N rows in summary tables (default: 10)",
     )
     p.add_argument(
         "--show-recent",
-        type=nonnegative_int,
+        type=_nonnegative_int,
         default=10,
         help="Show details for the most-recent N matching errors (default: 10)",
     )
     p.add_argument(
         "--traceback-lines",
-        type=nonnegative_int,
+        type=_nonnegative_int,
         default=0,
         help="Include the last N traceback lines per detail entry (default: 0)",
     )
@@ -960,21 +968,15 @@ def _build_interactive_parser(subparsers: argparse.Action) -> None:
         help="Use case-sensitive matching for the search string",
     )
 
-    def positive_int(value: str) -> int:
-        integer = int(value)
-        if integer < 1:
-            raise argparse.ArgumentTypeError("Value must be >= 1.")
-        return integer
-
     p.add_argument(
         "--show-recent",
-        type=positive_int,
+        type=_positive_int,
         default=10,
         help="Number of recent errors to list for selection (default: 10)",
     )
     p.add_argument(
         "--max-errors",
-        type=positive_int,
+        type=_positive_int,
         default=500,
         help="Analyze at most the most-recent N matching errors (default: 500)",
     )
@@ -1023,7 +1025,7 @@ def main() -> None:
             args.log_file,
             args.error_pattern,
             not args.case_sensitive,
-            getattr(args, "literal", False),
+            args.literal,
         )
         events = sorted(events, key=lambda e: e.timestamp)
         if args.max_errors > 0:
