@@ -233,7 +233,8 @@ def normalize_route(url: str, method: str) -> str:
     return f"{method} {path}"
 
 
-def print_top(title: str, counts: Counter, top_n: int) -> None:
+def print_top(title: str, counts: Counter, top_n: int,
+              sort_key_desc: bool = False) -> None:
     """Print a ranked summary table to stdout.
 
     Parameters
@@ -244,12 +245,20 @@ def print_top(title: str, counts: Counter, top_n: int) -> None:
         A :class:`~collections.Counter` mapping item labels to their counts.
     top_n:
         Maximum number of rows to display.
+    sort_key_desc:
+        When ``True`` the rows are sorted by key in descending order (useful
+        for date strings where newest-first is preferred) rather than by
+        frequency.  Defaults to ``False``.
     """
     print(f"\n{title}:")
     if not counts:
         print("  (none)")
         return
-    for key, count in counts.most_common(top_n):
+    if sort_key_desc:
+        items = sorted(counts.items(), key=lambda x: x[0], reverse=True)[:top_n]
+    else:
+        items = counts.most_common(top_n)
+    for key, count in items:
         print(f"  {count:>4}  {key}")
 
 
@@ -479,13 +488,13 @@ def summarize(
             in_prev_7d += 1
 
     print(f"Matched errors: {len(events)}")
-    print(f"Time range: {first_ts} to {last_ts}")
+    print(f"Time range: {last_ts} to {first_ts}")
     print(f"Last 24h: {in_last_24h} (previous 24h: {in_prev_24h})")
     print(f"Last 7d : {in_last_7d} (previous 7d : {in_prev_7d})")
 
     print_top("Top functions", by_function, top_n)
     print_top("Top exceptions", by_exception, top_n)
-    print_top("Counts by day", by_day, top_n)
+    print_top("Counts by day", by_day, top_n, sort_key_desc=True)
 
     print(f"\nMost recent {min(show_recent, len(events))} matching errors:")
     for event in reversed(events[-show_recent:]):
