@@ -1411,6 +1411,15 @@ def check_data_tables():
     # Process POST
     if request.method == 'POST':
         if BTN_CHECK_ALL_TABLES in request.form:
+            missing_data_tables, missing_other_entities = \
+                check_data_table_contents.collect_missing_data_files(current_document, eml_node)
+            if missing_data_tables or missing_other_entities:
+                raise MissingDataFiles(
+                    'Missing data files',
+                    document_name=current_document,
+                    missing_data_tables=missing_data_tables,
+                    missing_other_entities=missing_other_entities,
+                )
             check_data_table_contents.check_all_tables(current_document, eml_node)
 
     content, btn_disabled = check_data_table_contents.create_check_data_tables_status_page_content(

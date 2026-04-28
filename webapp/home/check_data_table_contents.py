@@ -1283,6 +1283,7 @@ def create_check_data_tables_status_page_content(document_name, eml_node):
                         onclick = f'onclick="return confirm(\'Data table size = {mb} MB. Continue?\') && stand_by_2;"'
                 action = f'<a href="data_table_fetch/{quoted_document_name}/{quoted_csv_name}/{quoted_url}"{onclick}>Fetch data table</a>'
             else:
+                btn_status = ''
                 action = 'CSV file missing. Upload via the Data Tables page.'
         output += f'<tr><td width=2%><span class ="nav_link {status}_circle"></span></td>'
         output += f'<td width=68%>{data_table_name}</td>'
