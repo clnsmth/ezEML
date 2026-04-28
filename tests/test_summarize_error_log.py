@@ -1,13 +1,13 @@
-"""Tests for ezeml_log_tools – preceding-context capture and display (summarize path)."""
+"""Tests for log_tools – preceding-context capture and display (summarize path)."""
 
 import io
 import os
 import sys
 import tempfile
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "webapp"))
 
-from ezeml_log_tools import parse_log, summarize  # noqa: E402
+from log_tools import parse_log, summarize  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Sample log fragments
