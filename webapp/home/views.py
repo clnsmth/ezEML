@@ -598,13 +598,12 @@ def data_table_errors(data_table_name:str=None):
     data_table_size = check_data_table_contents.get_data_table_size(data_table_node)
 
     if not check_data_table_contents.csv_file_exists(current_document, csv_filename):
-        missing_data_tables, missing_other_entities = \
+        missing_data_tables, _ = \
             check_data_table_contents.collect_missing_data_files(current_document, eml_node)
         raise MissingDataFiles(
             f'Data file not found: {csv_filename}',
             document_name=current_document,
             missing_data_tables=missing_data_tables,
-            missing_other_entities=missing_other_entities,
         )
 
     metadata_hash = check_data_table_contents.hash_data_table_metadata_settings(eml_node, data_table_name)
@@ -1409,25 +1408,24 @@ def check_data_tables():
     set_current_page('check_data_tables')
 
     # Detect missing files once; used for both POST handling and button-state rendering.
-    missing_data_tables, missing_other_entities = \
+    missing_data_tables, _ = \
         check_data_table_contents.collect_missing_data_files(current_document, eml_node)
 
     # Process POST
     if request.method == 'POST':
         if BTN_CHECK_ALL_TABLES in request.form:
-            if missing_data_tables or missing_other_entities:
+            if missing_data_tables:
                 raise MissingDataFiles(
                     'Missing data files',
                     document_name=current_document,
                     missing_data_tables=missing_data_tables,
-                    missing_other_entities=missing_other_entities,
                 )
             check_data_table_contents.check_all_tables(current_document, eml_node)
 
     content, btn_disabled = check_data_table_contents.create_check_data_tables_status_page_content(
         current_document, eml_node)
     # Enable the button whenever there are missing files to report, regardless of distribution URL.
-    if missing_data_tables or missing_other_entities:
+    if missing_data_tables:
         btn_disabled = ''
     tooltip = 'Nothing to check' if btn_disabled else ''
 

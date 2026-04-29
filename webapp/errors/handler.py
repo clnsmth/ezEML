@@ -142,15 +142,13 @@ def handle_deprecated_code_error(error):
 @app.errorhandler(MissingDataFiles)
 def handle_missing_data_files(error):
     log_error(
-        'Missing data files for document "{0}": data tables={1}, other entities={2}'.format(
+        'Missing data files for document "{0}": data tables={1}'.format(
             error.document_name,
             error.missing_data_tables,
-            error.missing_other_entities,
         )
     )
     return render_template(
         'missing_data_files_error.html',
         document_name=error.document_name,
         missing_data_tables=error.missing_data_tables,
-        missing_other_entities=error.missing_other_entities,
     ), 422

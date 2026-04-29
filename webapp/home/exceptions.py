@@ -20,11 +20,10 @@ class DataFileNotFound(ezEMLError):
 class MissingDataFiles(DataFileNotFound):
     """Raised when one or more data files referenced by a package cannot be found on the server."""
 
-    def __init__(self, message, document_name, missing_data_tables=None, missing_other_entities=None):
+    def __init__(self, message, document_name, missing_data_tables=None):
         super().__init__(message)
         self.document_name = document_name
         self.missing_data_tables = missing_data_tables or []
-        self.missing_other_entities = missing_other_entities or []
 
 
 class DataTableError(ezEMLError):
