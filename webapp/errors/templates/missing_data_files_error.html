@@ -1,0 +1,61 @@
+{% extends 'bootstrap/base.html' %}
+
+
+{% block content %}
+<div class="container" style="width: 50%;">
+    {% block app_content %}
+        <p>&nbsp;</p>
+        <h4 style="text-align: left;">Missing Data File(s)</h4>
+        <p>&nbsp;</p>
+
+        {% if missing_data_tables %}
+        <p>
+            The following data table
+            {% if missing_data_tables|length == 1 %}file is{% else %}files are{% endif %}
+            not present on the server:
+        </p>
+        <ul>
+            {% for name in missing_data_tables %}
+            <li><b>{{ name }}</b></li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if missing_other_entities %}
+        <p>
+            The following other
+            {% if missing_other_entities|length == 1 %}entity file is{% else %}entity files are{% endif %}
+            not present on the server:
+        </p>
+        <ul>
+            {% for name in missing_other_entities %}
+            <li><b>{{ name }}</b></li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        <p><b>What you can do:</b></p>
+        <ul>
+            {% if missing_data_tables %}
+            <li>
+                Re-upload the missing data table
+                {% if missing_data_tables|length == 1 %}file{% else %}files{% endif %}
+                from the
+                <a href="{{ url_for('dt.data_table_select', filename=document_name) }}">Data Tables page</a>.
+            </li>
+            {% endif %}
+            {% if missing_other_entities %}
+            <li>
+                Re-upload the missing other
+                {% if missing_other_entities|length == 1 %}entity file{% else %}entity files{% endif %}
+                from the
+                <a href="{{ url_for('ent.other_entity_select', filename=document_name) }}">Other Entities page</a>.
+            </li>
+            {% endif %}
+        </ul>
+
+        <p>&nbsp;</p>
+        <a style="float:left;" href="{{ url_for('home.index') }}"><h4>Continue</h4></a>
+    {% endblock %}
+</div>
+{% endblock %}
