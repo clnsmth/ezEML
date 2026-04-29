@@ -54,7 +54,7 @@ import webapp.home.metapype_client
 from webapp.home.home_utils import log_error, log_info, log_available_memory
 import webapp.home.utils.load_and_save
 from webapp.home.utils.security import validate_download_url
-from webapp.pages import PAGE_CHECK_DATA_TABLES, PAGE_DATA_TABLE_SELECT, PAGE_OTHER_ENTITY_SELECT
+from webapp.pages import PAGE_CHECK_DATA_TABLES
 from webapp.utils import path_exists, path_isdir, path_join
 
 import webapp.auth.user_data as user_data
@@ -983,6 +983,45 @@ def should_flash_missing_data_files(document_name):
     return package_datetime <= gc_cutoff_datetime
 
 
+def collect_missing_data_files(document_name, eml_node):
+    """Return (missing_data_tables, missing_other_entities) as two lists of filenames.
+
+    Args:
+        document_name (str): The name of the active document (used to locate the uploads folder).
+        eml_node (Node): The root metapype node of the EML document.
+
+    Skips data tables whose distribution URL points to EDI/PASTA since those files
+    are not expected to be stored locally.
+    """
+    missing_data_tables = []
+    data_table_nodes = []
+    eml_node.find_all_descendants(names.DATATABLE, data_table_nodes)
+    for data_table_node in data_table_nodes:
+        object_name = get_data_table_filename(data_table_node)
+        if not object_name:
+            continue
+        if not csv_file_exists(document_name, object_name):
+            online_distribution_url_node = data_table_node.find_single_node_by_path(
+                [names.PHYSICAL, names.DISTRIBUTION, names.ONLINE, names.URL])
+            if online_distribution_url_node and \
+                    online_distribution_url_node.content and \
+                    Config.PASTA_URL in online_distribution_url_node.content:
+                continue
+            missing_data_tables.append(object_name)
+
+    missing_other_entities = []
+    other_entity_nodes = []
+    eml_node.find_all_descendants(names.OTHERENTITY, other_entity_nodes)
+    for other_entity_node in other_entity_nodes:
+        object_name_node = other_entity_node.find_single_node_by_path([names.PHYSICAL, names.OBJECTNAME])
+        if not object_name_node or not object_name_node.content:
+            continue
+        if not csv_file_exists(document_name, object_name_node.content):
+            missing_other_entities.append(object_name_node.content)
+
+    return missing_data_tables, missing_other_entities
+
+
 def flash_missing_data_files(document_name, eml_node):
     """Flash a combined warning for any data files (data tables or other entities) absent from the uploads folder.
 
@@ -1000,51 +1039,23 @@ def flash_missing_data_files(document_name, eml_node):
     if not should_flash_missing_data_files(document_name):
         return 0
 
-    # --- data tables ---
-    missing_data_tables = []
-    data_table_nodes = []
-    eml_node.find_all_descendants(names.DATATABLE, data_table_nodes)
-    for data_table_node in data_table_nodes:
-        object_name = get_data_table_filename(data_table_node)
-        if not object_name:
-            continue
-        if not csv_file_exists(document_name, object_name):
-            # Skip tables hosted on EDI – they are not expected locally.
-            online_distribution_url_node = data_table_node.find_single_node_by_path(
-                [names.PHYSICAL, names.DISTRIBUTION, names.ONLINE, names.URL])
-            if online_distribution_url_node and \
-                    online_distribution_url_node.content and \
-                    Config.PASTA_URL in online_distribution_url_node.content:
-                continue
-            missing_data_tables.append(object_name)
+    missing_data_tables, missing_other_entities = collect_missing_data_files(document_name, eml_node)
 
     if missing_data_tables:
         file_list = ', '.join(f'"{n}"' for n in missing_data_tables)
         flash(
             f'The following data table {"file is" if len(missing_data_tables) == 1 else "files are"} not present on the '
-            f'server: {file_list}. '
+            f'ezEML server: {file_list}. '
             'This can happen when files are removed during server disk storage reclamation. '
             'You can re-upload them from the Data Tables page.',
             'warning'
         )
 
-    # --- other entities ---
-    missing_other_entities = []
-    other_entity_nodes = []
-    eml_node.find_all_descendants(names.OTHERENTITY, other_entity_nodes)
-    for other_entity_node in other_entity_nodes:
-        object_name_node = other_entity_node.find_single_node_by_path([names.PHYSICAL, names.OBJECTNAME])
-        if not object_name_node or not object_name_node.content:
-            continue
-        object_name = object_name_node.content
-        if not csv_file_exists(document_name, object_name):
-            missing_other_entities.append(object_name)
-
     if missing_other_entities:
         file_list = ', '.join(f'"{n}"' for n in missing_other_entities)
         flash(
             f'The following other {"entity file is" if len(missing_other_entities) == 1 else "entity files are"} not '
-            f'present on the server: {file_list}. '
+            f'present on the ezEML server: {file_list}. '
             'This can happen when files are removed during server disk storage reclamation. '
             'You can re-upload them from the Other Entities page.',
             'warning'
@@ -1196,6 +1207,9 @@ def check_all_tables(current_document, eml_node):
         csv_filename = get_data_table_filename(data_table_node)
         csv_filepath = get_csv_filepath(current_document, csv_filename)
         data_table_size = get_data_table_size(data_table_node)
+
+        if not csv_file_exists(current_document, csv_filename):
+            return
 
         metadata_hash = hash_data_table_metadata_settings(eml_node, data_table_name)
 
