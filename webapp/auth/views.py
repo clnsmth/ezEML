@@ -132,17 +132,19 @@ def login():
             edi_jwt = decode_edi_token(edi_token)
             idp_name = edi_jwt.get('idpName', None)
 
-        if (auth_token is not None and auth_token != "teapot") or idp_name == 'ldap':
+        if idp_name == 'ldap':
             # It's an LDAP login
-            pasta_token = PastaToken(auth_token)
-            uid = pasta_token.uid.split(",")[0]
-            cname = uid.split('=')[1]
-            if cname:
-                cname = cname.strip()
-            session_id = cname + "*" + pasta_token.uid
+            if auth_token is not None:
+                pasta_token = PastaToken(auth_token)
+                uid = pasta_token.uid
+                cname = uid.split(",")[0].split('=')[1]
+            else:
+                uid = edi_jwt.get('idpUid')
+                cname = edi_jwt.get('idpCommonName')
+            session_id = cname.strip() + "*" + uid
             user = User(session_id)
             login_user(user)
-            initialize_user_data(cname, 'LDAP', pasta_token.uid, auth_token, edi_token=edi_token)
+            initialize_user_data(cname, 'LDAP', uid, auth_token, edi_token=edi_token)
             log_usage(actions['LOGIN'], cname, 'LDAP', current_user.get_user_login())
             next_page = request.args.get('next')
             if not next_page or urlparse(next_page).netloc != '':
@@ -152,11 +154,7 @@ def login():
                 else:
                     next_page = url_for(PAGE_INDEX)
             return redirect(next_page)
-        elif auth_token == "teapot":
-            # It's Google, ORCID, or GitHub
-            log_usage(actions['LOGIN'], form.username.data, 'teapot')
-            accept_url = f"{Config.AUTH}/accept?uid={user_dn}&target={Config.TARGET}"
-            return redirect(accept_url)
+
         flash('Invalid username or password')
         return redirect(url_for(PAGE_LOGIN))
 

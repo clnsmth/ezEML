@@ -55,27 +55,26 @@ def authenticate_for_workflow(pasta_url: str) -> Optional[dict[str, str]]:
         edi_token = user_data.get_edi_token()
         edi_token_decoded = None
 
-        if not auth_token:
-            # This shouldn't happen
-            raise exceptions.AuthTokenExpired("Missing auth token")
-
-        # See if auth_token has expired
-        try:
-            auth_decoded = base64.b64decode(auth_token.split('-')[0]).decode('utf-8')
-            expiry = int(auth_decoded.split('*')[2])
-        except (ValueError, IndexError, UnicodeDecodeError, binascii.Error) as e:
-            raise exceptions.AuthTokenExpired("Unable to parse auth token") from e
+        if auth_token:
+            # See if auth_token has expired
+            try:
+                auth_decoded = base64.b64decode(auth_token.split('-')[0]).decode('utf-8')
+                expiry = int(auth_decoded.split('*')[2])
+            except (ValueError, IndexError, UnicodeDecodeError, binascii.Error) as e:
+                raise exceptions.AuthTokenExpired("Unable to parse auth token") from e
 
         if edi_token:
             edi_token_decoded = decode_edi_token(edi_token)
-            expiry = int(edi_token_decoded.get('exp', expiry))
+            expiry = int(edi_token_decoded.get('exp'))
 
         current_time = int(time.time())
         if expiry < current_time:
-            log_info(f"Auth token expired at {expiry}; current_time={current_time}")
+            log_info(f"Authentication token expired at {expiry}; current_time={current_time}")
             raise exceptions.AuthTokenExpired('')
 
-        cookies = {"auth-token": auth_token}
+        cookies = {}
+        if auth_token:
+            cookies["auth-token"] = auth_token
         if edi_token:
             cookies["edi-token"] = edi_token
         return cookies
@@ -92,10 +91,9 @@ def authenticate_for_workflow(pasta_url: str) -> Optional[dict[str, str]]:
         auth_token = response.cookies.get('auth-token')
         edi_token = response.cookies.get('edi-token')
 
-        if not auth_token:
-            raise exceptions.AuthTokenExpired("Missing auth-token cookie")
-
-        cookies = {"auth-token": auth_token}
+        cookies = {}
+        if auth_token:
+            cookies = {"auth-token": auth_token}
         if edi_token:
             cookies["edi-token"] = edi_token
         return cookies

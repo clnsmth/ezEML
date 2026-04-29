@@ -86,6 +86,13 @@ def get_user_uploads_folder_name():
     return validate_user_data_path(user_uploads_folder_name)
 
 
+def get_user_error_backups_folder_name():
+    user_folder_name = get_user_folder_name(current_user_directory_only=False)
+    user_error_backups_folder_name = f'{user_folder_name}/error_backups'
+
+    return validate_user_data_path(user_error_backups_folder_name)
+
+
 def get_document_uploads_folder_name(document_name=None, encoded_for_url=False):
     if not document_name:
         if get_active_document():
@@ -137,10 +144,11 @@ def initialize_user_data(cname, idp, uid, auth_token, edi_token=None, sub=None):
     user_properties['auth_token'] = auth_token
     user_properties['edi_token'] = edi_token
 
-    auth_decoded = base64.b64decode(auth_token.split('-')[0]).decode('utf-8')
-    expiry = int(auth_decoded.split('*')[2])
-    current_time = int(time.time()) * 1000
-    log_info(f'initialize_user_data:  expiry:{expiry}  current_time:{current_time}  auth_decoded:{auth_decoded}')
+    if auth_token:
+        auth_decoded = base64.b64decode(auth_token.split('-')[0]).decode('utf-8')
+        expiry = int(auth_decoded.split('*')[2])
+        current_time = int(time.time()) * 1000
+        log_info(f'initialize_user_data:  expiry:{expiry}  current_time:{current_time}  auth_decoded:{auth_decoded}')
 
     user_properties['sub'] = sub
     save_user_properties(user_properties)

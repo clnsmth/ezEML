@@ -78,7 +78,7 @@
                     <span class="username">{{ account[1] }}</span>
                     <div style="margin-left: 5rem;">
                         <strong>Identity Provider:</strong> {{ account[2] }}
-                        {% if account[4] and not account[2] == 'EDI' %}
+                        {% if account[4] and not account[2] in ['EDI', 'Microsoft'] %}
                         &nbsp;({{ account[4] }})
                         {% endif %}
                     </div>
